@@ -1,0 +1,5 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+numpy
+torch
+websockets>=12   # tools/ws_smoke_test.py (uvicorn[standard]에도 포함)

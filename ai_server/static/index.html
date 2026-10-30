@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KSL AI 서버 테스트</title>
+<style>
+  :root { --bg:#f6f6f4; --fg:#1d1d1b; --muted:#6b6b66; --ok:#1f7a4d; --bad:#b3261e; --card:#fff; --line:#ddd; }
+  body { margin:0; font-family: system-ui, "Malgun Gothic", sans-serif; background:var(--bg); color:var(--fg); }
+  main { max-width: 980px; margin: 0 auto; padding: 16px; display:grid; gap:16px; grid-template-columns: 1fr 300px; }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
+  .stage { position:relative; background:#000; border-radius:8px; overflow:hidden; aspect-ratio: 4/3; }
+  video, canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform: scaleX(-1); }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px; display:grid; gap:10px; align-content:start; }
+  button { font-size:15px; padding:10px; border-radius:6px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  button.primary { background:var(--fg); color:#fff; border-color:var(--fg); }
+  button:disabled { opacity:.4; cursor:default; }
+  select { font-size:15px; padding:8px; }
+  .muted { color:var(--muted); font-size:13px; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:99px; font-size:13px; background:#eee; margin-right:4px; }
+  .pill.on { background:#d7f0e2; color:var(--ok); }
+  #result { font-size:14px; line-height:1.6; }
+  .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
+</style>
+</head>
+<body>
+<main>
+  <div class="stage"><video id="video" playsinline muted></video><canvas id="overlay"></canvas></div>
+  <div class="panel">
+    <div><b>KSL 서버 테스트</b><div class="muted" id="conn">서버 연결 중…</div></div>
+    <label class="muted">목표 단어 <select id="target"></select></label>
+    <button id="camBtn">카메라 켜기</button>
+    <button id="startBtn" class="primary" disabled>녹화 시작</button>
+    <button id="endBtn" disabled>끝 · 판정</button>
+    <div><span class="pill" id="pBody">몸</span><span class="pill" id="pL">왼손</span><span class="pill" id="pR">오른손</span></div>
+    <div class="muted" id="rec">대기</div>
+    <div id="result"></div>
+    <div class="muted"><b>스페이스바</b>로 녹화 시작/끝 (버튼 클릭 동작이 녹화에 섞이지 않게)</div>
+    <div class="muted">화면 구도: 머리부터 허리까지, 양 팔꿈치가 다 들어오게 카메라에서 떨어져 앉기 (학습 영상과 비슷하게)</div>
+    <div class="muted">MediaPipe는 원본 영상으로 돌리고 화면만 좌우반전해서 보여줍니다 (mirrored=false).</div>
+  </div>
+</main>
+
+<script type="module">
+import { FilesetResolver, HandLandmarker, PoseLandmarker }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+const $ = (id) => document.getElementById(id);
+const video = $("video"), canvas = $("overlay"), ctx = canvas.getContext("2d");
+let hand, pose, ws, recording = false, nFrames = 0, lastTs = -1;
+
+// ---- 서버 연결
+const wsUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/practice`;
+function connect() {
+  ws = new WebSocket(wsUrl);
+  ws.onopen = () => $("conn").textContent = "서버 연결됨";
+  ws.onclose = () => { $("conn").textContent = "연결 끊김 — 3초 후 재시도"; setTimeout(connect, 3000); };
+  ws.onmessage = (ev) => onServer(JSON.parse(ev.data));
+}
+function onServer(m) {
+  if (m.type === "status") {
+    $("pBody").classList.toggle("on", m.body);
+    $("pL").classList.toggle("on", m.left_hand);
+    $("pR").classList.toggle("on", m.right_hand);
+  } else if (m.type === "result") {
+    const verdict = m.target ? `<span class="${m.correct ? "ok" : "bad"}">${m.correct ? "정답" : "다시 해 보세요"}</span> (목표 확률 ${m.target_prob})<br>` : "";
+    $("result").innerHTML = verdict + m.top.map(t => `${t.label || t.id} ${(t.prob * 100).toFixed(1)}%`).join("<br>")
+      + `<div class="muted">프레임 ${m.frames} (${m.fps ?? "?"} fps), 사용 구간 ${m.used_frames.join("~")}`
+      + `<br>손 보인 비율: 왼 ${m.hand_visible?.left}, 오른 ${m.hand_visible?.right}`
+      + (m.saved ? `<br>저장: ${m.saved}` : "") + `</div>`;
+    $("rec").textContent = "대기";
+  } else if (m.type === "error") {
+    $("result").innerHTML = `<span class="bad">오류</span> ${m.code}: ${JSON.stringify(m.message)}`;
+  }
+}
+const lessons = await fetch("/lessons").then(r => r.json()).catch(() => ({}));
+for (const c of (lessons.word || [])) $("target").add(new Option(`${c.label} (${c.id})`, c.id));
+if (!(lessons.word || []).length) $("target").add(new Option("모델 없음 — 서버 로그 확인", ""));
+connect();
+
+// ---- MediaPipe (원본 영상 기준)
+async function initMediaPipe() {
+  const files = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  hand = await HandLandmarker.createFromOptions(files, {
+    baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task", delegate: "GPU" },
+    runningMode: "VIDEO", numHands: 2 });
+  pose = await PoseLandmarker.createFromOptions(files, {
+    baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task", delegate: "GPU" },
+    runningMode: "VIDEO", numPoses: 1 });
+}
+
+$("camBtn").onclick = async () => {
+  $("camBtn").disabled = true; $("camBtn").textContent = "모델 불러오는 중…";
+  await initMediaPipe();
+  video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
+  await video.play();
+  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+  $("camBtn").textContent = "카메라 켜짐"; $("startBtn").disabled = false;
+  requestAnimationFrame(loop);
+};
+
+$("startBtn").onclick = () => {
+  ws.send(JSON.stringify({ type: "start", lesson: "word", target: $("target").value || null,
+                           width: video.videoWidth, height: video.videoHeight, mirrored: false }));
+  recording = true; nFrames = 0; $("result").textContent = "";
+  $("startBtn").disabled = true; $("endBtn").disabled = false;
+};
+$("endBtn").onclick = () => {
+  recording = false; ws.send(JSON.stringify({ type: "end" }));
+  $("startBtn").disabled = false; $("endBtn").disabled = true; $("rec").textContent = "판정 중…";
+};
+
+// 스페이스바로 시작/끝 토글
+document.addEventListener("keydown", (e) => {
+  if (e.code !== "Space" || e.repeat) return;
+  e.preventDefault();
+  if (!recording && !$("startBtn").disabled) $("startBtn").click();
+  else if (recording) $("endBtn").click();
+});
+
+function loop() {
+  const ts = performance.now();
+  if (video.currentTime !== lastTs) {
+    lastTs = video.currentTime;
+    const h = hand.detectForVideo(video, ts);
+    const p = pose.detectForVideo(video, ts);
+    draw(h, p);
+    if (recording && ws.readyState === 1) {
+      const handed = h.handedness ?? h.handednesses ?? [];
+      ws.send(JSON.stringify({
+        type: "frame", t: ts,
+        pose: p.landmarks?.[0]?.map(l => [l.x, l.y, l.z, l.visibility ?? 1]) ?? null,
+        hands: h.landmarks.map((lm, i) => ({
+          landmarks: lm.map(l => [l.x, l.y, l.z]),
+          handedness: handed[i]?.[0]?.categoryName ?? null,
+          score: handed[i]?.[0]?.score ?? null })) }));
+      $("rec").textContent = `녹화 중 · ${++nFrames} 프레임`;
+    }
+  }
+  requestAnimationFrame(loop);
+}
+
+function draw(h, p) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const dot = (l, c) => { ctx.fillStyle = c; ctx.fillRect(l.x * canvas.width - 2, l.y * canvas.height - 2, 4, 4); };
+  for (const lm of h.landmarks) lm.forEach(l => dot(l, "#4fd1c5"));
+  for (const lm of (p.landmarks || [])) lm.slice(0, 17).forEach(l => dot(l, "#f6ad55"));
+}
+</script>
+</body>
+</html>

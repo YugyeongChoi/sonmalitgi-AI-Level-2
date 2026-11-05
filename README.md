@@ -78,6 +78,6 @@ PYTHONPATH=/절대경로/word-model WORD_MODEL_ADAPTER=web_adapter:create_model 
 정확한 실제 영상 종횡비를 `HANDS_VIDEO_ASPECT`로 설정해야 합니다(예: 640×480이면 1.3333333333).
 가로·세로 비율이 달라지면 이 값도 바꿔야 합니다. 장기적으로 프레임 메시지에 실제 해상도를 전달하는 것이 적절합니다.
 
-수정 코드는 로컬 word-model 폴더의 hands-only 브랜치에 커밋했습니다.
-개인 포크는 생성했으며, 수정 코드의 공개 업로드는 사용자 승인 대기 상태입니다.
+수정 코드는 개인 포크의 hands-only 브랜치에 업로드했습니다.
+https://github.com/YugyeongChoi/sonmalitgi-AI-Level-2/tree/hands-only
 학습 데이터와 새 시험 가중치는 업로드 대상에서 제외합니다. 운영 웹사이트에는 배포하지 않았습니다.

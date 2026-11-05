@@ -1,7 +1,7 @@
 """
 레슨 종류별 인식기. 모두 같은 인터페이스:
   classes: [{"id": "WORD1157", "label": "나"}, ...]
-  predict(arr54: (T, 54, 3)) -> 확률 (n_classes,)
+  predict(arr54: (T, 42, 3)) -> 확률 (n_classes,)
 
 새 모델(팀원의 지문자·지숫자)을 붙일 때는 Recognizer를 상속한 클래스를 만들고 LOADERS에 등록한다.
 입력이 54점이 아니라면 predict 안에서 arr54를 그 모델의 입력 형식으로 바꾸면 된다.
@@ -29,7 +29,7 @@ class WordRecognizer(Recognizer):
 
     def __init__(self, ckpt_path, device="cpu"):
         import torch
-        from word_dataset import Config, make_features
+        from hands_dataset import Config, make_features
         from word_model import load_checkpoint
 
         self._torch, self._make_features, self.device = torch, make_features, device
@@ -48,7 +48,7 @@ class WordRecognizer(Recognizer):
         self.classes = [{"id": w, "label": labels.get(w, "")} for w in ckpt["classes"]]
 
     def predict(self, arr54):
-        x = self._make_features(arr54, self.cfg)      # (32, 194), 학습과 같은 전처리
+        x = self._make_features(arr54, self.cfg)      # (32, 170), 학습과 같은 전처리
         with self._torch.no_grad():
             t = self._torch.from_numpy(x)[None].to(self.device)
             return self._torch.softmax(self.model(t), -1)[0].cpu().numpy()

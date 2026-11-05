@@ -5,11 +5,11 @@
 import torch
 import torch.nn as nn
 
-from word_dataset import N_FEAT
+from hands_dataset import N_FEAT, FEATURE_SCHEMA
 
 
 class WordLSTM(nn.Module):
-    """Linear(194→h) → 양방향 LSTM → 시간축 평균+최대 풀링 → Linear(클래스)."""
+    """Linear(170→h) → 양방향 LSTM → 시간축 평균+최대 풀링 → Linear(클래스)."""
 
     def __init__(self, n_cls, n_in=N_FEAT, hidden=128, layers=2, dropout=0.3):
         super().__init__()
@@ -28,6 +28,8 @@ class WordLSTM(nn.Module):
 def load_checkpoint(path, device="cpu"):
     """best.pt → (model.eval(), ckpt dict). 체크포인트: model, classes, cfg, arch, epoch."""
     ckpt = torch.load(path, map_location=device, weights_only=True)
+    if ckpt.get("feature_schema") != FEATURE_SCHEMA or ckpt.get("arch", {}).get("n_in") != N_FEAT:
+        raise ValueError("Hands-only checkpoint required; retrain with train_word_lstm.py")
     arch = ckpt.get("arch", {})
     model = WordLSTM(len(ckpt["classes"]), n_in=arch.get("n_in", N_FEAT),
                      hidden=arch.get("hidden", 128), layers=arch.get("layers", 2), dropout=0.0)

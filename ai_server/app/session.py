@@ -1,7 +1,7 @@
 """WebSocket 연결 하나 = 연습 세션 하나. 프레임을 모았다가 end에서 판정한다."""
 import numpy as np
 
-from .landmarks import mediapipe_to_openpose54, presence
+from .landmarks import mediapipe_to_hands42, presence
 from .protocol import FrameMsg, StartMsg
 
 
@@ -15,7 +15,7 @@ class PracticeSession:
     def __init__(self, registry, segmenter, settings):
         self.registry, self.segmenter, self.s = registry, segmenter, settings
         self.start_msg = None
-        self.frames = []          # (54, 3) 배열 목록
+        self.frames = []          # (42, 3) 배열 목록
         self.times = []
 
     @property
@@ -39,7 +39,7 @@ class PracticeSession:
         if len(self.frames) >= self.s.max_frames:
             raise SessionError("too_long", f"최대 {self.s.max_frames}프레임을 넘었습니다. end를 보내세요")
         st = self.start_msg
-        arr = mediapipe_to_openpose54(msg.pose, msg.hands, st.width, st.height, st.mirrored)
+        arr = mediapipe_to_hands42(msg.hands, st.width, st.height, st.mirrored)
         self.frames.append(arr)
         self.times.append(msg.t)
         if len(self.frames) % self.s.status_every == 0:
@@ -87,7 +87,7 @@ class PracticeSession:
         return result
 
     def _save(self, arr, result):
-        """KSL_SAVE_DIR 설정 시 시도마다 54점 배열(npy) + 결과(json) 저장 → 시각화·오답 분석용."""
+        """KSL_SAVE_DIR 설정 시 시도마다 42점 배열(npy) + 결과(json) 저장 → 시각화·오답 분석용."""
         import json
         import time
         from pathlib import Path

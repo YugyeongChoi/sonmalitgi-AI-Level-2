@@ -7,7 +7,7 @@
   2) 증강 켜고:  그래도 train을 맞춰야 함 (못 하면 증강이 너무 셈)
   val(다른 제공자) 정확도는 참고용.
 
-모델: Linear(194→h) → 양방향 LSTM → 시간축 평균+최대 풀링 → Linear(클래스)
+모델: Linear(170→h) → 양방향 LSTM → 시간축 평균+최대 풀링 → Linear(클래스)
   - 단어 단위 인식이라 영상 전체를 보고 판단 → 양방향 사용 가능 (앱에서도 녹화 후 판정)
 
 출력 (<out>/)
@@ -32,7 +32,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, RandomSampler
 
-from word_dataset import N_FEAT, Config, build_datasets, worker_init_fn
+from hands_dataset import N_FEAT, FEATURE_SCHEMA, Config, build_datasets, worker_init_fn
 
 
 class WordLSTM(nn.Module):
@@ -103,12 +103,12 @@ def main():
     ap.add_argument("--eval-every", type=int, default=10)
     ap.add_argument("--workers", type=int, default=0, help="Windows는 0 권장")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--out", default=None, help="출력 폴더 (기본 runs/<시각>)")
+    ap.add_argument("--out", default=None, help="출력 폴더 (기본 runs/hands_<시각>)")
     args = ap.parse_args()
 
     random.seed(args.seed); np.random.seed(args.seed); torch.manual_seed(args.seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    out = Path(args.out or f"runs/{time.strftime('%Y%m%d_%H%M%S')}")
+    out = Path(args.out or f"runs/hands_{time.strftime('%Y%m%d_%H%M%S')}")
     out.mkdir(parents=True, exist_ok=True)
 
     cfg = Config(augment=not args.no_augment)
@@ -149,6 +149,7 @@ def main():
             if score >= best:                       # 동점이면 나중 것(더 학습된 것) 저장
                 best = score
                 torch.save(dict(model=model.state_dict(), classes=classes, cfg=asdict(cfg),
+                                feature_schema=FEATURE_SCHEMA,
                                 arch=dict(hidden=args.hidden, layers=args.layers, n_in=N_FEAT),
                                 epoch=ep), out / "best.pt")
             print(f"ep {ep:4d} | train loss {tr_loss:.3f} acc {tr_acc:.3f} | "

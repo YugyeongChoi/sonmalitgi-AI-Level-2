@@ -1,3 +1,5 @@
+> **hands-only 브랜치:** 아래 내용은 원본 상체 모델 안내입니다. 현재 손 전용 모델의 실행·입력·제약은 루트 [README](../README.md)를 기준으로 하세요. 기존 best.pt는 사용할 수 없습니다.
+
 # KSL AI 서버 (FastAPI)
 
 브라우저가 웹캠 영상에서 MediaPipe로 좌표를 뽑아 WebSocket으로 보내면, 서버가 학습 모델로 판정해 돌려준다.

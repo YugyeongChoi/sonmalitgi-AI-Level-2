@@ -17,27 +17,20 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from app.landmarks import BODY, BODY_FROM_MP, LH, RH  # noqa: E402
+from app.landmarks import LH, RH  # noqa: E402
 
 W, H = 1920, 1080   # 정규화 기준. 서버가 같은 값으로 되돌리므로 원래 해상도와 같을 필요 없음
 
 
 def openpose54_to_mediapipe(fr):
     """(54, 3) → (pose 33×4, hands). MediaPipe가 원본 영상에서 낼 법한 형태로."""
-    pose = np.zeros((33, 4), np.float32)
-    for k, j in enumerate(BODY_FROM_MP):
-        if j is None:
-            continue
-        x, y, c = fr[BODY + k]
-        if np.isfinite(x) and c > 0:
-            pose[j] = [x / W, y / H, 0.0, 1.0]
     hands = []
     for base, label in [(RH, "Left"), (LH, "Right")]:   # 원본 영상에서 MediaPipe 라벨은 사람 기준과 반대
         h = fr[base:base + 21]
         if np.isfinite(h[:, 0]).all() and (h[:, 2] > 0).all():
             hands.append({"landmarks": [[float(x) / W, float(y) / H, 0.0] for x, y in h[:, :2]],
                           "handedness": label, "score": 1.0})
-    return pose.tolist(), hands
+    return None, hands
 
 
 def main():

@@ -12,8 +12,8 @@ class HandsWordAdapter:
     mode = "hands-word-experimental-v1"
     input_schema = "mediapipe-hands-v1"
 
-    def __init__(self, checkpoint, aspect):
-        if not math.isfinite(aspect) or aspect <= 0:
+    def __init__(self, checkpoint, aspect=None):
+        if aspect is not None and (not math.isfinite(aspect) or aspect <= 0):
             raise ValueError("HANDS_VIDEO_ASPECT must be the actual video width/height")
         self.aspect = aspect
         path = Path(__file__).parent / "ai_server/ml/word_model.py"
@@ -34,6 +34,10 @@ class HandsWordAdapter:
         for i, frame in enumerate(frames):
             if frame.get("schema") != self.input_schema:
                 raise ValueError("Hands-only landmarks required")
+            width, height = frame.get("image_width"), frame.get("image_height")
+            aspect = width / height if width and height else self.aspect
+            if aspect is None:
+                raise ValueError("Actual camera dimensions are required")
             for base, name in ((0, "left_hand"), (21, "right_hand")):
                 points = frame[name]
                 if not points:
@@ -42,7 +46,7 @@ class HandsWordAdapter:
                     raise ValueError("Expected 21 hand points")
                 seen = True
                 for j, p in enumerate(points):
-                    arr[i, base+j] = [p["x"] * self.aspect, p["y"], 1.]
+                    arr[i, base+j] = [p["x"] * aspect, p["y"], 1.]
         if not seen:
             return Prediction(None, 0., False, False, "손이 카메라에 보이도록 위치를 조정해 주세요.")
         x = make_features(arr, self.cfg)
@@ -55,4 +59,4 @@ class HandsWordAdapter:
 
 def create_model():
     return HandsWordAdapter(os.environ["HANDS_WORD_CHECKPOINT"],
-                            float(os.environ["HANDS_VIDEO_ASPECT"]))
+                            float(os.environ["HANDS_VIDEO_ASPECT"]) if os.getenv("HANDS_VIDEO_ASPECT") else None)

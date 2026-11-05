@@ -81,3 +81,18 @@ PYTHONPATH=/절대경로/word-model WORD_MODEL_ADAPTER=web_adapter:create_model 
 수정 코드는 개인 포크의 hands-only 브랜치에 업로드했습니다.
 https://github.com/YugyeongChoi/sonmalitgi-AI-Level-2/tree/hands-only
 학습 데이터와 새 시험 가중치는 업로드 대상에서 제외합니다. 운영 웹사이트에는 배포하지 않았습니다.
+
+
+## Railway 배포
+
+루트 Dockerfile은 CPU 추론 환경을 만들고 공개 데이터의 중급 11단어를 빌드 중 재학습합니다.
+새 가중치는 이미지에만 포함하며 GitHub에 업로드하지 않습니다.
+런타임에는 기존 웹사이트 프로토콜 호환 패키지(deployment/ai_server)를 사용합니다.
+`/ws/v1/evaluate`는 기존 일반 평가 경로, `/ws/v1/word/evaluate`는 손 전용 중급 경로입니다.
+`ALLOWED_ORIGINS`를 프론트엔드 HTTPS Origin으로 설정합니다.
+`/health`의 word_model_mode와 word_supported_ids로 모델 로드를 확인합니다.
+프론트 VITE_WORD_AI_WS_URL에는 `wss://서버주소/ws/v1/word/evaluate`를 설정합니다.
+
+웹사이트는 실제 image_width/image_height를 프레임에 포함합니다. 이 값이 있으면
+HANDS_VIDEO_ASPECT 환경 변수를 설정할 필요가 없습니다.
+사용자 영상/좌표는 저장하지 않으며, 시험 모델은 RETRY와 예측값만 반환합니다.

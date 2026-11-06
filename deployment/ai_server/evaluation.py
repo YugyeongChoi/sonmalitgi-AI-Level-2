@@ -4,7 +4,8 @@ from .model import Prediction
 
 class Evaluator:
     """Thresholds are starting configuration, not validated accuracy guarantees."""
-    def __init__(self, target: str, threshold: float = .9, stable: int = 3):
+    def __init__(self, target: str, threshold: float = .9, stable: int = 3, require_calibrated: bool = True):
+        self.require_calibrated = require_calibrated
         self.target = target
         self.threshold = threshold
         self.history = deque(maxlen=stable)
@@ -15,7 +16,7 @@ class Evaluator:
         if not math.isfinite(p.confidence) or not 0 <= p.confidence <= 1:
             raise ValueError("Invalid model confidence")
         self.last = p
-        if not p.capture_ok or not p.calibrated or p.predicted_id is None or p.confidence < self.threshold:
+        if not p.capture_ok or (self.require_calibrated and not p.calibrated) or p.predicted_id is None or p.confidence < self.threshold:
             self.history.clear()
         else:
             self.history.append(p.predicted_id)
@@ -27,9 +28,9 @@ class Evaluator:
         elif stable:
             result = "PASS" if p.predicted_id == self.target else "FAIL"
         feedback = {
-            "PASS": "목표 수어가 연속으로 인식됐어요.",
+            "PASS": "목표 수어가 인식됐어요.",
             "RETRY": "동작을 이어가거나 다시 표현해 주세요.",
-            "FAIL": "다른 수어가 연속으로 인식됐어요. 기준 영상을 확인해 주세요.",
+            "FAIL": "다른 수어가 인식됐어요. 기준 영상을 확인해 주세요.",
             "CAPTURE_ERROR": "촬영 상태를 확인해 주세요.",
         }[result]
         return dict(predicted_id=p.predicted_id, confidence=p.confidence,

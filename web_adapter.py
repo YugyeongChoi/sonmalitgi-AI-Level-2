@@ -1,4 +1,4 @@
-"""Bridge for sonmalitgi-web WORD_MODEL_ADAPTER; experimental, no PASS."""
+"""Bridge for sonmalitgi-web WORD_MODEL_ADAPTER; experimental practice scoring."""
 import importlib.util
 import math
 import os
@@ -53,8 +53,8 @@ class HandsWordAdapter:
         with torch.inference_mode():
             prob = self.model(torch.from_numpy(x)[None]).softmax(-1)[0]
         idx = int(prob.argmax())
-        return Prediction(self.supported_ids[idx], float(prob[idx]), True, False,
-                          "손 전용 시험 모델의 예측입니다. 웹캠 성능 검증 전이므로 통과 판정은 하지 않습니다.")
+        # Keep calibration status honest; the host applies an explicit practice policy.
+        return Prediction(self.supported_ids[idx], float(prob[idx]), True, False)
 
 
 def create_model():

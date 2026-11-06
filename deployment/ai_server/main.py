@@ -88,7 +88,9 @@ async def evaluate(ws: WebSocket):
             await ws.send_json({"type": "error", "message": "서버 모델이 랜드마크 입력을 지원하지 않습니다. predict_landmarks 어댑터를 연결해 주세요."})
             return
         previous_timestamp = -1
-        judge = Evaluator(target)
+        # User-enabled practice policy; it does not claim model calibration.
+        judge = (Evaluator(target, threshold=.5, stable=1, require_calibrated=False)
+                 if word_session else Evaluator(target))
         frames = deque(maxlen=WINDOW)
         count = 0
         latest = dict(result="CAPTURE_ERROR", predicted_id=None, confidence=0,

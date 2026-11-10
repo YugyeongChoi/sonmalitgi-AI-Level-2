@@ -23,6 +23,10 @@ ORIGINS = set(os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0
 async def lifespan(app):
     app.state.model = load_model()
     app.state.word_model = load_word_model()
+    app.state.unit5_model = None
+    if checkpoint := os.getenv("UNIT5_CHECKPOINT"):
+        from web_adapter import HandsWordAdapter
+        app.state.unit5_model = HandsWordAdapter(checkpoint)
     # Serialize inference for adapters that are not thread-safe.
     app.state.model_lock = asyncio.Lock()
     yield
@@ -33,6 +37,7 @@ app = FastAPI(lifespan=lifespan)
 def health():
     return {"status": "ok", "model_mode": app.state.model.mode,
             "word_model_mode": app.state.word_model.mode,
+            "unit5_supported_ids": sorted(getattr(app.state.unit5_model, "supported_ids", [])),
             "word_supported_ids": sorted(getattr(app.state.word_model, "supported_ids", []))}
 
 def decode_frame(data: bytes):
@@ -72,6 +77,12 @@ async def evaluate(ws: WebSocket):
         input_mode = config.get("input_mode", "jpeg")
         if input_mode not in ("jpeg", "landmarks"):
             raise ValueError("Unknown input mode")
+        unit5_model = getattr(app.state, "unit5_model", None)
+        sentence_session = (
+            word_session and unit5_model is not None and target in unit5_model.supported_ids
+        )
+        if sentence_session:
+            model = unit5_model
         if word_session:
             if input_mode != "landmarks":
                 raise ValueError("Word model requires landmarks")
@@ -91,7 +102,7 @@ async def evaluate(ws: WebSocket):
         # User-enabled practice policy; it does not claim model calibration.
         judge = (Evaluator(target, threshold=.5, stable=1, require_calibrated=False)
                  if word_session else Evaluator(target))
-        frames = deque(maxlen=WINDOW)
+        frames = deque(maxlen=MAX_SECONDS * 8 if sentence_session else WINDOW)
         count = 0
         latest = dict(result="CAPTURE_ERROR", predicted_id=None, confidence=0,
                       feedback="분석할 프레임이 부족합니다.")
@@ -99,15 +110,23 @@ async def evaluate(ws: WebSocket):
         async def infer():
             async with app.state.model_lock:
                 prediction = await asyncio.to_thread(predict, list(frames))
+            if sentence_session and prediction.capture_ok:
+                return dict(
+                    result="EXPERIMENTAL", predicted_id=prediction.predicted_id,
+                    confidence=prediction.confidence,
+                    feedback="목표 문장으로 인식했어요." if prediction.predicted_id == target
+                    else "다른 문장으로 인식했어요. 기준 영상을 다시 확인해 주세요.",
+                )
             return judge.update(prediction)
         began = time.monotonic()
         await ws.send_json(dict(type="ready", attempt_id=attempt_id,
-                                model_mode=model.mode, input_mode=input_mode, fps=8, window=WINDOW))
+                                model_mode="unit5-experimental-v1" if sentence_session else model.mode,
+                                input_mode=input_mode, fps=8, window=WINDOW))
         while True:
             event = await receive()
             elapsed = time.monotonic() - began
             if elapsed > MAX_SECONDS:
-                if len(frames) == WINDOW and count > last_inferred:
+                if len(frames) >= WINDOW and count > last_inferred:
                     latest = await infer()
                 await ws.send_json(dict(type="final", attempt_id=attempt_id,
                                         target_id=target, model_mode=model.mode, **latest))
@@ -121,7 +140,7 @@ async def evaluate(ws: WebSocket):
                 if not isinstance(message, dict):
                     raise ValueError("Object required")
             if message is not None and message.get("type") == "stop":
-                if len(frames) == WINDOW and count > last_inferred:
+                if len(frames) >= WINDOW and count > last_inferred:
                     latest = await infer()
                 await ws.send_json(dict(type="final", attempt_id=attempt_id,
                                         target_id=target, model_mode=model.mode, **latest))
@@ -141,7 +160,7 @@ async def evaluate(ws: WebSocket):
             frames.append(frame)
             count += 1
             # One client frame is in flight; server acknowledges after any inference.
-            if len(frames) == WINDOW and (count - WINDOW) % STRIDE == 0:
+            if not sentence_session and len(frames) == WINDOW and (count - WINDOW) % STRIDE == 0:
                 latest = await infer()
                 last_inferred = count
                 await ws.send_json(dict(type="prediction", attempt_id=attempt_id,

@@ -14,6 +14,10 @@ class WordSequence:
     def _judge(word):
         return Evaluator(word, threshold=.9, stable=2, require_calibrated=False)
 
+    @property
+    def window(self):
+        return 12 if self.stage else 8
+
     def update(self, prediction, frames):
         result = self.judge.update(prediction)
         result["recognized_words"] = [self.first] if self.stage else []
@@ -23,7 +27,9 @@ class WordSequence:
                             recognized_words=[self.first, self.second])
             self.stage = 1
             self.judge = self._judge(self.second)
-            frames.clear()
+            # Keep the tail where a naturally connected second sign may have started.
+            while len(frames) > 2:
+                frames.popleft()
             return dict(result, result="RETRY", recognized_words=[self.first],
                         feedback=f"운전을 인식했어요. 이어서 ‘{self.second}’를 표현해 주세요.")
         expected = self.second if self.stage else self.first

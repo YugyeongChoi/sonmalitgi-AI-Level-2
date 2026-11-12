@@ -117,7 +117,7 @@ async def evaluate(ws: WebSocket):
         if sentence_session:
             judge = Evaluator(target, threshold=.9, stable=2, require_calibrated=False)
         min_frames = 8 if sequence else SENTENCE_MIN_FRAMES if sentence_session else WINDOW
-        frames = deque(maxlen=10 if sequence else SENTENCE_WINDOW if sentence_session else WINDOW)
+        frames = deque(maxlen=12 if sequence else SENTENCE_WINDOW if sentence_session else WINDOW)
         stride = 2 if sequence else STRIDE
         count = 0
         latest = dict(result="CAPTURE_ERROR", predicted_id=None, confidence=0,
@@ -126,8 +126,11 @@ async def evaluate(ws: WebSocket):
                                 if sentence_session else "분석할 프레임이 부족합니다."))
         last_inferred = 0
         async def infer():
+            samples = list(frames)
+            if sequence:
+                samples = samples[-sequence.window:]
             async with app.state.model_lock:
-                prediction = await asyncio.to_thread(predict, list(frames))
+                prediction = await asyncio.to_thread(predict, samples)
             return sequence.update(prediction, frames) if sequence else judge.update(prediction)
         began = time.monotonic()
         await ws.send_json(dict(type="ready", attempt_id=attempt_id,

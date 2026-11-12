@@ -19,7 +19,7 @@ COPY word_dataset.py hands_dataset.py web_adapter.py model_source/
 COPY ai_server/ml/word_model.py model_source/ai_server/ml/word_model.py
 COPY --from=build /train/runs/hands_intermediate_experiment/best.pt models/best.pt
 COPY --from=build /train/runs/hands_intermediate_experiment/classes.json models/classes.json
-LABEL app.sonmalitgi.unit5.training-signers="REAL01,REAL02,REAL03,REAL04,REAL05,REAL06,REAL07,REAL08"
+LABEL app.sonmalitgi.unit5.training-signers="REAL01,REAL02,REAL03,REAL04,REAL05,REAL06,REAL07,REAL08,REAL09"
 COPY unit5.pt models/unit5.pt
 ENV UNIT5_CHECKPOINT=/app/models/unit5.pt
 ENV WORD_MODEL_ADAPTER=web_adapter:create_model HANDS_WORD_CHECKPOINT=/app/models/best.pt

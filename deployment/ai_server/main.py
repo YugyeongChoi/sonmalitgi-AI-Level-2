@@ -14,7 +14,8 @@ from .model import load_model, load_word_model
 from .landmarks import decode_landmarks
 
 WINDOW = 16
-SENTENCE_MIN_FRAMES = 8
+SENTENCE_MIN_FRAMES = 16
+SENTENCE_WINDOW = 32
 STRIDE = 4
 MAX_BYTES = 150_000
 MAX_SECONDS = 30
@@ -103,24 +104,19 @@ async def evaluate(ws: WebSocket):
         # User-enabled practice policy; it does not claim model calibration.
         judge = (Evaluator(target, threshold=.5, stable=1, require_calibrated=False)
                  if word_session else Evaluator(target))
+        if sentence_session:
+            judge = Evaluator(target, threshold=.9, stable=2, require_calibrated=False)
         min_frames = SENTENCE_MIN_FRAMES if sentence_session else WINDOW
-        frames = deque(maxlen=MAX_SECONDS * 8 if sentence_session else WINDOW)
+        frames = deque(maxlen=SENTENCE_WINDOW if sentence_session else WINDOW)
         count = 0
         latest = dict(result="CAPTURE_ERROR", predicted_id=None, confidence=0,
-                      feedback=("카메라가 켜진 뒤 문장을 끝까지 표현하고 종료해 주세요. "
+                      feedback=("카메라가 켜진 뒤 문장을 끝까지 표현해 주세요. "
                                 f"촬영 프레임이 {min_frames}개 이상 필요합니다."
                                 if sentence_session else "분석할 프레임이 부족합니다."))
         last_inferred = 0
         async def infer():
             async with app.state.model_lock:
                 prediction = await asyncio.to_thread(predict, list(frames))
-            if sentence_session and prediction.capture_ok:
-                return dict(
-                    result="EXPERIMENTAL", predicted_id=prediction.predicted_id,
-                    confidence=prediction.confidence,
-                    feedback="목표 문장으로 인식했어요." if prediction.predicted_id == target
-                    else "다른 문장으로 인식했어요. 기준 영상을 다시 확인해 주세요.",
-                )
             return judge.update(prediction)
         began = time.monotonic()
         await ws.send_json(dict(type="ready", attempt_id=attempt_id,
@@ -164,7 +160,7 @@ async def evaluate(ws: WebSocket):
             frames.append(frame)
             count += 1
             # One client frame is in flight; server acknowledges after any inference.
-            if not sentence_session and len(frames) == WINDOW and (count - WINDOW) % STRIDE == 0:
+            if len(frames) >= min_frames and (count - min_frames) % STRIDE == 0:
                 latest = await infer()
                 last_inferred = count
                 await ws.send_json(dict(type="prediction", attempt_id=attempt_id,

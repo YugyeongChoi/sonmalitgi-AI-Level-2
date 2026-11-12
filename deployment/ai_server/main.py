@@ -14,6 +14,7 @@ from .model import load_model, load_word_model
 from .landmarks import decode_landmarks
 
 WINDOW = 16
+SENTENCE_MIN_FRAMES = 8
 STRIDE = 4
 MAX_BYTES = 150_000
 MAX_SECONDS = 30
@@ -102,10 +103,13 @@ async def evaluate(ws: WebSocket):
         # User-enabled practice policy; it does not claim model calibration.
         judge = (Evaluator(target, threshold=.5, stable=1, require_calibrated=False)
                  if word_session else Evaluator(target))
+        min_frames = SENTENCE_MIN_FRAMES if sentence_session else WINDOW
         frames = deque(maxlen=MAX_SECONDS * 8 if sentence_session else WINDOW)
         count = 0
         latest = dict(result="CAPTURE_ERROR", predicted_id=None, confidence=0,
-                      feedback="분석할 프레임이 부족합니다.")
+                      feedback=("카메라가 켜진 뒤 문장을 끝까지 표현하고 종료해 주세요. "
+                                f"촬영 프레임이 {min_frames}개 이상 필요합니다."
+                                if sentence_session else "분석할 프레임이 부족합니다."))
         last_inferred = 0
         async def infer():
             async with app.state.model_lock:
@@ -121,12 +125,12 @@ async def evaluate(ws: WebSocket):
         began = time.monotonic()
         await ws.send_json(dict(type="ready", attempt_id=attempt_id,
                                 model_mode="unit5-experimental-v1" if sentence_session else model.mode,
-                                input_mode=input_mode, fps=8, window=WINDOW))
+                                input_mode=input_mode, fps=8, window=min_frames))
         while True:
             event = await receive()
             elapsed = time.monotonic() - began
             if elapsed > MAX_SECONDS:
-                if len(frames) >= WINDOW and count > last_inferred:
+                if len(frames) >= min_frames and count > last_inferred:
                     latest = await infer()
                 await ws.send_json(dict(type="final", attempt_id=attempt_id,
                                         target_id=target, model_mode=model.mode, **latest))
@@ -140,7 +144,7 @@ async def evaluate(ws: WebSocket):
                 if not isinstance(message, dict):
                     raise ValueError("Object required")
             if message is not None and message.get("type") == "stop":
-                if len(frames) >= WINDOW and count > last_inferred:
+                if len(frames) >= min_frames and count > last_inferred:
                     latest = await infer()
                 await ws.send_json(dict(type="final", attempt_id=attempt_id,
                                         target_id=target, model_mode=model.mode, **latest))

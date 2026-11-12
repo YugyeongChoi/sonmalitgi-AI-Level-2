@@ -21,6 +21,8 @@ COPY --from=build /train/runs/hands_intermediate_experiment/best.pt models/best.
 COPY --from=build /train/runs/hands_intermediate_experiment/classes.json models/classes.json
 LABEL app.sonmalitgi.unit5.training-signers="REAL01,REAL02,REAL03,REAL04,REAL05,REAL06,REAL07,REAL08,REAL09"
 COPY unit5.pt models/unit5.pt
+COPY unit5_words.pt models/unit5_words.pt
+ENV UNIT5_WORD_CHECKPOINT=/app/models/unit5_words.pt
 ENV UNIT5_CHECKPOINT=/app/models/unit5.pt
 ENV WORD_MODEL_ADAPTER=web_adapter:create_model HANDS_WORD_CHECKPOINT=/app/models/best.pt
 RUN useradd --uid 10001 --create-home app

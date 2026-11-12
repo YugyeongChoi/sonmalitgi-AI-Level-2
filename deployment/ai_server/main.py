@@ -1,3 +1,4 @@
+from .sequence import SEQUENCES, WordSequence
 import asyncio
 from collections import deque
 from contextlib import asynccontextmanager
@@ -29,6 +30,10 @@ async def lifespan(app):
     if checkpoint := os.getenv("UNIT5_CHECKPOINT"):
         from web_adapter import HandsWordAdapter
         app.state.unit5_model = HandsWordAdapter(checkpoint)
+    app.state.unit5_words = None
+    if checkpoint := os.getenv("UNIT5_WORD_CHECKPOINT"):
+        from web_adapter import HandsWordAdapter
+        app.state.unit5_words = HandsWordAdapter(checkpoint)
     # Serialize inference for adapters that are not thread-safe.
     app.state.model_lock = asyncio.Lock()
     yield
@@ -40,6 +45,7 @@ def health():
     return {"status": "ok", "model_mode": app.state.model.mode,
             "word_model_mode": app.state.word_model.mode,
             "unit5_supported_ids": sorted(getattr(app.state.unit5_model, "supported_ids", [])),
+            "unit5_sequence_ids": sorted(SEQUENCES) if app.state.unit5_words else [],
             "word_supported_ids": sorted(getattr(app.state.word_model, "supported_ids", []))}
 
 def decode_frame(data: bytes):
@@ -96,6 +102,10 @@ async def evaluate(ws: WebSocket):
                 await ws.send_json({"type": "error", "code": "UNSUPPORTED_TARGET",
                                     "message": "이 표현은 현재 중급 모델의 지원 단어에 포함되지 않습니다."})
                 return
+        sequence = (WordSequence(target)
+                    if sentence_session and target in SEQUENCES and app.state.unit5_words else None)
+        if sequence:
+            model = app.state.unit5_words
         predict = getattr(model, "predict_landmarks", None) if input_mode == "landmarks" else model.predict
         if not callable(predict):
             await ws.send_json({"type": "error", "message": "서버 모델이 랜드마크 입력을 지원하지 않습니다. predict_landmarks 어댑터를 연결해 주세요."})
@@ -106,8 +116,9 @@ async def evaluate(ws: WebSocket):
                  if word_session else Evaluator(target))
         if sentence_session:
             judge = Evaluator(target, threshold=.9, stable=2, require_calibrated=False)
-        min_frames = SENTENCE_MIN_FRAMES if sentence_session else WINDOW
-        frames = deque(maxlen=SENTENCE_WINDOW if sentence_session else WINDOW)
+        min_frames = 8 if sequence else SENTENCE_MIN_FRAMES if sentence_session else WINDOW
+        frames = deque(maxlen=10 if sequence else SENTENCE_WINDOW if sentence_session else WINDOW)
+        stride = 2 if sequence else STRIDE
         count = 0
         latest = dict(result="CAPTURE_ERROR", predicted_id=None, confidence=0,
                       feedback=("카메라가 켜진 뒤 문장을 끝까지 표현해 주세요. "
@@ -117,7 +128,7 @@ async def evaluate(ws: WebSocket):
         async def infer():
             async with app.state.model_lock:
                 prediction = await asyncio.to_thread(predict, list(frames))
-            return judge.update(prediction)
+            return sequence.update(prediction, frames) if sequence else judge.update(prediction)
         began = time.monotonic()
         await ws.send_json(dict(type="ready", attempt_id=attempt_id,
                                 model_mode="unit5-experimental-v1" if sentence_session else model.mode,
@@ -160,7 +171,7 @@ async def evaluate(ws: WebSocket):
             frames.append(frame)
             count += 1
             # One client frame is in flight; server acknowledges after any inference.
-            if len(frames) >= min_frames and (count - min_frames) % STRIDE == 0:
+            if len(frames) >= min_frames and (count - min_frames) % stride == 0:
                 latest = await infer()
                 last_inferred = count
                 await ws.send_json(dict(type="prediction", attempt_id=attempt_id,

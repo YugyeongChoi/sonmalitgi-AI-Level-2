@@ -1,3 +1,4 @@
+from .metrics import AttemptMetrics
 from .sequence import SEQUENCES, WordSequence
 import asyncio
 from collections import deque
@@ -124,24 +125,46 @@ async def evaluate(ws: WebSocket):
                       feedback=("카메라가 켜진 뒤 문장을 끝까지 표현해 주세요. "
                                 f"촬영 프레임이 {min_frames}개 이상 필요합니다."
                                 if sentence_session else "분석할 프레임이 부족합니다."))
+        metrics = AttemptMetrics()
         last_inferred = 0
         async def infer():
             samples = list(frames)
             if sequence:
                 samples = samples[-sequence.window:]
+            queued_at = time.monotonic()
             async with app.state.model_lock:
+                inference_started = time.monotonic()
                 prediction = await asyncio.to_thread(predict, samples)
-            return sequence.update(prediction, frames) if sequence else judge.update(prediction)
+            inference_finished = time.monotonic()
+            outcome = sequence.update(prediction, frames) if sequence else judge.update(prediction)
+            if outcome["result"] == "PASS" and metrics.pass_seconds is None:
+                metrics.pass_seconds = round(inference_finished - metrics.started, 3)
+            window_seconds = (
+                (samples[-1]["timestamp_ms"] - samples[0]["timestamp_ms"]) / 1000
+                if input_mode == "landmarks" and len(samples) > 1 else None
+            )
+            outcome["metrics"] = dict(
+                **metrics.snapshot(),
+                window_frames=len(samples),
+                window_seconds=round(window_seconds, 3) if window_seconds is not None else None,
+                queue_ms=round((inference_started - queued_at) * 1000, 2),
+                inference_ms=round((inference_finished - inference_started) * 1000, 2),
+                raw_predicted_id=prediction.predicted_id,
+                raw_confidence=prediction.confidence,
+            )
+            return outcome
         began = time.monotonic()
         await ws.send_json(dict(type="ready", attempt_id=attempt_id,
                                 model_mode="unit5-experimental-v1" if sentence_session else model.mode,
-                                input_mode=input_mode, fps=8, window=min_frames))
+                                input_mode=input_mode, fps=8, window=min_frames, stride=stride,
+                                server_revision=os.getenv("RAILWAY_GIT_COMMIT_SHA", "local")))
         while True:
             event = await receive()
             elapsed = time.monotonic() - began
             if elapsed > MAX_SECONDS:
                 if len(frames) >= min_frames and count > last_inferred:
                     latest = await infer()
+                latest["metrics"] = dict(latest.get("metrics", {}), **metrics.snapshot())
                 await ws.send_json(dict(type="final", attempt_id=attempt_id,
                                         target_id=target, model_mode=model.mode, **latest))
                 break
@@ -156,6 +179,7 @@ async def evaluate(ws: WebSocket):
             if message is not None and message.get("type") == "stop":
                 if len(frames) >= min_frames and count > last_inferred:
                     latest = await infer()
+                latest["metrics"] = dict(latest.get("metrics", {}), **metrics.snapshot())
                 await ws.send_json(dict(type="final", attempt_id=attempt_id,
                                         target_id=target, model_mode=model.mode, **latest))
                 break
@@ -172,6 +196,7 @@ async def evaluate(ws: WebSocket):
                     raise ValueError("JPEG binary required")
                 frame = await asyncio.to_thread(decode_frame, data)
             frames.append(frame)
+            metrics.receive_frame()
             count += 1
             # One client frame is in flight; server acknowledges after any inference.
             if len(frames) >= min_frames and (count - min_frames) % stride == 0:
@@ -182,10 +207,11 @@ async def evaluate(ws: WebSocket):
                                         model_mode=model.mode, **latest))
                 # PASS is terminal; FAIL is provisional until user stops.
                 if latest["result"] == "PASS":
+                    latest["metrics"] = dict(latest.get("metrics", {}), **metrics.snapshot())
                     await ws.send_json(dict(type="final", attempt_id=attempt_id,
                                             target_id=target, model_mode=model.mode, **latest))
                     break
-            await ws.send_json(dict(type="ack", frame_count=count))
+            await ws.send_json(dict(type="ack", frame_count=count, metrics=metrics.snapshot()))
     except WebSocketDisconnect:
         return
     except (ValueError, KeyError, TypeError, UnidentifiedImageError, Image.DecompressionBombError):

@@ -1,0 +1,190 @@
+{
+  "split": "val",
+  "signer": "REAL17",
+  "checkpoint_sha256": "656510214e83141cad300bac2de70fa0113ad7599e1f21899bfe1c393b68a0af",
+  "overall": {
+    "correct": 25,
+    "total": 25
+  },
+  "front": {
+    "correct": 5,
+    "total": 5
+  },
+  "predictions": [
+    {
+      "clip_id": "NIA_SL_SEN0009_REAL17_D",
+      "angle": "D",
+      "expected": "SEN0009",
+      "predicted": "SEN0009",
+      "confidence": 0.9990189075469971
+    },
+    {
+      "clip_id": "NIA_SL_SEN0009_REAL17_F",
+      "angle": "F",
+      "expected": "SEN0009",
+      "predicted": "SEN0009",
+      "confidence": 0.9984411597251892
+    },
+    {
+      "clip_id": "NIA_SL_SEN0009_REAL17_L",
+      "angle": "L",
+      "expected": "SEN0009",
+      "predicted": "SEN0009",
+      "confidence": 0.99692302942276
+    },
+    {
+      "clip_id": "NIA_SL_SEN0009_REAL17_R",
+      "angle": "R",
+      "expected": "SEN0009",
+      "predicted": "SEN0009",
+      "confidence": 0.9991538524627686
+    },
+    {
+      "clip_id": "NIA_SL_SEN0009_REAL17_U",
+      "angle": "U",
+      "expected": "SEN0009",
+      "predicted": "SEN0009",
+      "confidence": 0.9977319240570068
+    },
+    {
+      "clip_id": "NIA_SL_SEN0011_REAL17_D",
+      "angle": "D",
+      "expected": "SEN0011",
+      "predicted": "SEN0011",
+      "confidence": 0.999135434627533
+    },
+    {
+      "clip_id": "NIA_SL_SEN0011_REAL17_F",
+      "angle": "F",
+      "expected": "SEN0011",
+      "predicted": "SEN0011",
+      "confidence": 0.998969554901123
+    },
+    {
+      "clip_id": "NIA_SL_SEN0011_REAL17_L",
+      "angle": "L",
+      "expected": "SEN0011",
+      "predicted": "SEN0011",
+      "confidence": 0.9978148937225342
+    },
+    {
+      "clip_id": "NIA_SL_SEN0011_REAL17_R",
+      "angle": "R",
+      "expected": "SEN0011",
+      "predicted": "SEN0011",
+      "confidence": 0.9994729161262512
+    },
+    {
+      "clip_id": "NIA_SL_SEN0011_REAL17_U",
+      "angle": "U",
+      "expected": "SEN0011",
+      "predicted": "SEN0011",
+      "confidence": 0.9968999624252319
+    },
+    {
+      "clip_id": "NIA_SL_SEN0012_REAL17_D",
+      "angle": "D",
+      "expected": "SEN0012",
+      "predicted": "SEN0012",
+      "confidence": 0.9995844960212708
+    },
+    {
+      "clip_id": "NIA_SL_SEN0012_REAL17_F",
+      "angle": "F",
+      "expected": "SEN0012",
+      "predicted": "SEN0012",
+      "confidence": 0.9996218681335449
+    },
+    {
+      "clip_id": "NIA_SL_SEN0012_REAL17_L",
+      "angle": "L",
+      "expected": "SEN0012",
+      "predicted": "SEN0012",
+      "confidence": 0.9995918869972229
+    },
+    {
+      "clip_id": "NIA_SL_SEN0012_REAL17_R",
+      "angle": "R",
+      "expected": "SEN0012",
+      "predicted": "SEN0012",
+      "confidence": 0.9995808005332947
+    },
+    {
+      "clip_id": "NIA_SL_SEN0012_REAL17_U",
+      "angle": "U",
+      "expected": "SEN0012",
+      "predicted": "SEN0012",
+      "confidence": 0.9996581077575684
+    },
+    {
+      "clip_id": "NIA_SL_SEN0013_REAL17_D",
+      "angle": "D",
+      "expected": "SEN0013",
+      "predicted": "SEN0013",
+      "confidence": 0.9991794228553772
+    },
+    {
+      "clip_id": "NIA_SL_SEN0013_REAL17_F",
+      "angle": "F",
+      "expected": "SEN0013",
+      "predicted": "SEN0013",
+      "confidence": 0.9988393187522888
+    },
+    {
+      "clip_id": "NIA_SL_SEN0013_REAL17_L",
+      "angle": "L",
+      "expected": "SEN0013",
+      "predicted": "SEN0013",
+      "confidence": 0.9989621639251709
+    },
+    {
+      "clip_id": "NIA_SL_SEN0013_REAL17_R",
+      "angle": "R",
+      "expected": "SEN0013",
+      "predicted": "SEN0013",
+      "confidence": 0.5621392726898193
+    },
+    {
+      "clip_id": "NIA_SL_SEN0013_REAL17_U",
+      "angle": "U",
+      "expected": "SEN0013",
+      "predicted": "SEN0013",
+      "confidence": 0.9970096349716187
+    },
+    {
+      "clip_id": "NIA_SL_SEN0017_REAL17_D",
+      "angle": "D",
+      "expected": "SEN0017",
+      "predicted": "SEN0017",
+      "confidence": 0.9992017149925232
+    },
+    {
+      "clip_id": "NIA_SL_SEN0017_REAL17_F",
+      "angle": "F",
+      "expected": "SEN0017",
+      "predicted": "SEN0017",
+      "confidence": 0.9994732737541199
+    },
+    {
+      "clip_id": "NIA_SL_SEN0017_REAL17_L",
+      "angle": "L",
+      "expected": "SEN0017",
+      "predicted": "SEN0017",
+      "confidence": 0.999207079410553
+    },
+    {
+      "clip_id": "NIA_SL_SEN0017_REAL17_R",
+      "angle": "R",
+      "expected": "SEN0017",
+      "predicted": "SEN0017",
+      "confidence": 0.9987024068832397
+    },
+    {
+      "clip_id": "NIA_SL_SEN0017_REAL17_U",
+      "angle": "U",
+      "expected": "SEN0017",
+      "predicted": "SEN0017",
+      "confidence": 0.9994242191314697
+    }
+  ]
+}

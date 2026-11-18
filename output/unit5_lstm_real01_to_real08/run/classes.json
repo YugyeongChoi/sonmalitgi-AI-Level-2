@@ -1,0 +1,27 @@
+[
+ {
+  "index": 0,
+  "word_id": "SEN0009",
+  "label": "운전 / 천천히"
+ },
+ {
+  "index": 1,
+  "word_id": "SEN0011",
+  "label": "운전 / 빨리"
+ },
+ {
+  "index": 2,
+  "word_id": "SEN0012",
+  "label": "가다 / 빨리"
+ },
+ {
+  "index": 3,
+  "word_id": "SEN0013",
+  "label": "시간 / 급하다"
+ },
+ {
+  "index": 4,
+  "word_id": "SEN0017",
+  "label": "약속 / 늦다"
+ }
+]

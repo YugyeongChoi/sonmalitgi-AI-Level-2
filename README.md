@@ -99,3 +99,7 @@ https://github.com/YugyeongChoi/sonmalitgi-AI-Level-2/tree/hands-only
 웹사이트는 실제 image_width/image_height를 프레임에 포함합니다. 이 값이 있으면
 HANDS_VIDEO_ASPECT 환경 변수를 설정할 필요가 없습니다.
 사용자 영상/좌표는 저장하지 않으며, 시험 모델은 위 연습 판정 규칙을 사용합니다. 일반 평가 경로의 기존 검증 기준은 유지합니다.
+
+## 유닛 5 학습 산출물
+
+문장 및 단어 모델의 버전별 가중치, 학습 로그, 전처리 코드, 검증 보고서와 실시간 모의 평가 결과를 [output/README.md](output/README.md)에 정리했습니다.

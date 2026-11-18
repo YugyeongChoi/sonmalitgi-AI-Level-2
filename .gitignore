@@ -2,3 +2,10 @@
 __pycache__/
 .pytest_cache/
 runs/hands_*/
+
+# AI Hub raw and extracted Unit 5 landmarks are kept locally.
+output/**/*.zip
+output/**/*.tmp
+output/**/*.npy
+output/**/clips/
+output/**/data/

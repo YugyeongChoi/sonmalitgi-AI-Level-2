@@ -1,0 +1,17 @@
+[
+ {
+  "index": 0,
+  "word_id": "빨리",
+  "label": "빨리"
+ },
+ {
+  "index": 1,
+  "word_id": "운전",
+  "label": "운전"
+ },
+ {
+  "index": 2,
+  "word_id": "천천히",
+  "label": "천천히"
+ }
+]

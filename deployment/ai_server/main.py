@@ -118,7 +118,7 @@ async def evaluate(ws: WebSocket):
             judge = Evaluator(target, threshold=.9, stable=2, require_calibrated=False)
         min_frames = 8 if sequence else SENTENCE_MIN_FRAMES if sentence_session else WINDOW
         frames = deque(maxlen=12 if sequence else SENTENCE_WINDOW if sentence_session else WINDOW)
-        stride = 2 if sequence else STRIDE
+        stride = 2 if sentence_session else STRIDE
         count = 0
         latest = dict(result="CAPTURE_ERROR", predicted_id=None, confidence=0,
                       feedback=("카메라가 켜진 뒤 문장을 끝까지 표현해 주세요. "

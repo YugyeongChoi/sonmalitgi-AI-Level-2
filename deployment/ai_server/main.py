@@ -228,3 +228,78 @@ async def evaluate(ws: WebSocket):
                 await ws.close()
             except RuntimeError:
                 pass
+
+
+@app.websocket("/ws/v1/dictionary/recognize")
+async def recognize(ws: WebSocket):
+    """Continuous, target-free recognition; never awards learning progress."""
+    from .recognition import RecognitionState
+    if ws.headers.get("origin") not in ORIGINS:
+        await ws.close(code=1008)
+        return
+    await ws.accept()
+    try:
+        raw = await asyncio.wait_for(ws.receive_text(), timeout=10)
+        if len(raw.encode("utf-8")) > 2048:
+            raise ValueError("Start too large")
+        config = json.loads(raw)
+        if not isinstance(config, dict) or config.get("type") != "start":
+            raise ValueError("Start required")
+        scope = config.get("scope", "intermediate")
+        if scope not in ("intermediate", "unit5"):
+            raise ValueError("Unknown scope")
+        model = app.state.word_model if scope == "intermediate" else app.state.unit5_words
+        if model is None or model.mode == "demo":
+            await ws.send_json(dict(type="error", message="이 범위의 단어 모델을 준비 중입니다."))
+            return
+        supported = list(model.supported_ids)
+        state = RecognitionState(supported)
+        frames = deque(maxlen=16 if scope == "intermediate" else 12)
+        minimum = 16 if scope == "intermediate" else 8
+        count, previous = 0, -1
+        await ws.send_json(dict(type="ready", supported_ids=supported, scope=scope))
+        began = time.monotonic()
+        while time.monotonic() - began < 120:
+            raw = await asyncio.wait_for(ws.receive_text(), timeout=15)
+            if len(raw.encode("utf-8")) > MAX_BYTES:
+                raise ValueError("Frame too large")
+            message = json.loads(raw)
+            if not isinstance(message, dict):
+                raise ValueError("Object required")
+            if message.get("type") == "stop":
+                return
+            if message.get("schema") != "mediapipe-hands-v1":
+                raise ValueError("Hands schema required")
+            frame = decode_landmarks(message, previous)
+            previous = frame["timestamp_ms"]
+            if not frame["left_hand"] and not frame["right_hand"]:
+                frames.clear()
+                state.reset()
+                count = 0
+                await ws.send_json(dict(type="prediction", predicted_id=None, confidence=0,
+                                        stable=False, message="양손을 카메라에 보여 주세요."))
+            else:
+                frames.append(frame)
+                count += 1
+                if len(frames) >= minimum and (count - minimum) % 2 == 0:
+                    async with app.state.model_lock:
+                        prediction = await asyncio.to_thread(model.predict_landmarks, list(frames))
+                    await ws.send_json(dict(type="prediction", **state.update(prediction)))
+            await ws.send_json(dict(type="ack"))
+        await ws.send_json(dict(type="ended", message="2분이 지났습니다. 다시 시작해 주세요."))
+    except WebSocketDisconnect:
+        pass
+    except asyncio.TimeoutError:
+        await ws.send_json(dict(type="error", message="연결 시간이 초과됐습니다. 다시 시작해 주세요."))
+    except (ValueError, KeyError, TypeError):
+        await ws.send_json(dict(type="error", message="입력 형식을 확인해 주세요."))
+    except Exception:
+        import logging
+        logging.exception("Dictionary recognition failed")
+        await ws.send_json(dict(type="error", message="인식 처리에 실패했습니다. 다시 시작해 주세요."))
+    finally:
+        if ws.client_state.name != "DISCONNECTED":
+            try:
+                await ws.close()
+            except RuntimeError:
+                pass

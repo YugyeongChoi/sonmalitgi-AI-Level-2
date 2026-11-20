@@ -33,5 +33,12 @@ class Evaluator:
             "FAIL": "다른 수어가 인식됐어요. 기준 영상을 확인해 주세요.",
             "CAPTURE_ERROR": "촬영 상태를 확인해 주세요.",
         }[result]
-        return dict(predicted_id=p.predicted_id, confidence=p.confidence,
+        consecutive = 0
+        for predicted in reversed(self.history):
+            if predicted != self.target:
+                break
+            consecutive += 1
+        return dict(stable_count=consecutive, stable_required=self.history.maxlen,
+                    stable_target=self.target,
+                    predicted_id=p.predicted_id, confidence=p.confidence,
                     result=result, feedback=p.diagnostic or feedback)

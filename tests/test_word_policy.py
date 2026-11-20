@@ -36,3 +36,19 @@ def test_sentence_sequence_requires_three_consecutive_predictions():
     for _ in range(2):
         assert sequence.update(slow, frames)['result'] == 'RETRY'
     assert sequence.update(slow, frames)['result'] == 'PASS'
+
+
+def test_consecutive_progress_tracks_target_and_resets():
+    judge = Evaluator('목표', threshold=.9, stable=3, require_calibrated=False)
+    good = Prediction('목표', .95, True, False)
+    assert judge.update(good)['stable_count'] == 1
+    assert judge.update(good)['stable_count'] == 2
+    assert judge.update(Prediction('다른말', .99, True, False))['stable_count'] == 0
+    assert judge.update(good)['stable_count'] == 1
+    assert judge.update(Prediction('목표', .8, True, False))['stable_count'] == 0
+    for expected in (1, 2, 3):
+        result = judge.update(good)
+        assert result['stable_count'] == expected
+        assert result['stable_required'] == 3
+        assert result['stable_target'] == '목표'
+    assert result['result'] == 'PASS'

@@ -31,6 +31,8 @@ class WordSequence:
             while len(frames) > 2:
                 frames.popleft()
             return dict(result, result="RETRY", recognized_words=[self.first],
+                        stable_count=0, stable_required=self.judge.history.maxlen,
+                        stable_target=self.second,
                         feedback=f"운전을 인식했어요. 이어서 ‘{self.second}’를 표현해 주세요.")
         expected = self.second if self.stage else self.first
         if result["result"] != "CAPTURE_ERROR":

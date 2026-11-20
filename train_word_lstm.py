@@ -99,7 +99,8 @@ def main():
     ap.add_argument("--wd", type=float, default=1e-4)
     ap.add_argument("--hidden", type=int, default=128)
     ap.add_argument("--layers", type=int, default=2)
-    ap.add_argument("--dropout", type=float, default=0.3)
+    ap.add_argument("--dropout", type=float, default=None,
+                    help="명시하면 증강 여부와 무관하게 적용. 생략 시 증강 켬=0.3, 끔=0.0")
     ap.add_argument("--eval-every", type=int, default=10)
     ap.add_argument("--workers", type=int, default=0, help="Windows는 0 권장")
     ap.add_argument("--seed", type=int, default=0)
@@ -128,7 +129,9 @@ def main():
                     worker_init_fn=worker_init_fn if args.workers > 0 else None)
     vl = DataLoader(va, batch_size=args.batch, shuffle=False, num_workers=0)
 
-    drop = 0.0 if args.no_augment else args.dropout
+    drop = args.dropout if args.dropout is not None else (0.0 if args.no_augment else 0.3)
+    if not 0.0 <= drop < 1.0:
+        raise SystemExit("dropout은 0 이상 1 미만이어야 합니다")
     model = WordLSTM(len(classes), hidden=args.hidden, layers=args.layers, dropout=drop).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.wd)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
@@ -150,7 +153,7 @@ def main():
                 best = score
                 torch.save(dict(model=model.state_dict(), classes=classes, cfg=asdict(cfg),
                                 feature_schema=FEATURE_SCHEMA,
-                                arch=dict(hidden=args.hidden, layers=args.layers, n_in=N_FEAT),
+                                arch=dict(hidden=args.hidden, layers=args.layers, n_in=N_FEAT, dropout=drop),
                                 epoch=ep), out / "best.pt")
             print(f"ep {ep:4d} | train loss {tr_loss:.3f} acc {tr_acc:.3f} | "
                   f"val loss {row['val_loss']} acc {row['val_acc']} | {time.time() - t0:.0f}s")

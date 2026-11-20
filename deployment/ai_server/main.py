@@ -116,7 +116,7 @@ async def evaluate(ws: WebSocket):
         judge = (Evaluator(target, threshold=.5, stable=1, require_calibrated=False)
                  if word_session else Evaluator(target))
         if sentence_session:
-            judge = Evaluator(target, threshold=.9, stable=2, require_calibrated=False)
+            judge = Evaluator(target, threshold=.9, stable=3, require_calibrated=False)
         min_frames = 8 if sequence else SENTENCE_MIN_FRAMES if sentence_session else WINDOW
         frames = deque(maxlen=12 if sequence else SENTENCE_WINDOW if sentence_session else WINDOW)
         stride = 2 if sentence_session else STRIDE

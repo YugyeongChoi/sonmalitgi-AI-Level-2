@@ -12,7 +12,7 @@ class WordSequence:
 
     @staticmethod
     def _judge(word):
-        return Evaluator(word, threshold=.9, stable=2, require_calibrated=False)
+        return Evaluator(word, threshold=.9, stable=3, require_calibrated=False)
 
     @property
     def window(self):

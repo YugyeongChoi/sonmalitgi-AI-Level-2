@@ -32,6 +32,7 @@ def load_checkpoint(path, device="cpu"):
         raise ValueError("Hands-only checkpoint required; retrain with train_word_lstm.py")
     arch = ckpt.get("arch", {})
     model = WordLSTM(len(ckpt["classes"]), n_in=arch.get("n_in", N_FEAT),
-                     hidden=arch.get("hidden", 128), layers=arch.get("layers", 2), dropout=0.0)
+                     hidden=arch.get("hidden", 128), layers=arch.get("layers", 2),
+                     dropout=arch.get("dropout", 0.0))
     model.load_state_dict(ckpt["model"])
     return model.to(device).eval(), ckpt

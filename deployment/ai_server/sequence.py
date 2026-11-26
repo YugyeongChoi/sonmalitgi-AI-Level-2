@@ -1,4 +1,4 @@
-from .fist_gate import driving_fists_visible
+from .fist_gate import driving_fists_visible, driving_motion_visible
 from .evaluation import Evaluator
 
 SEQUENCES = {"SEN0009": ("운전", "천천히"), "SEN0011": ("운전", "빨리")}
@@ -27,6 +27,13 @@ class WordSequence:
                         stable_count=0, stable_required=self.judge.history.maxlen,
                         stable_target=self.first,
                         feedback="운전은 두 손을 주먹 모양으로 표현해 주세요. 손가락을 굽히고 양손이 잘 보이도록 해 주세요.")
+        if self.stage == 0 and not driving_motion_visible(frames):
+            self.judge.history.clear()
+            return dict(result="RETRY", predicted_id=prediction.predicted_id,
+                        confidence=prediction.confidence, recognized_words=[],
+                        stable_count=0, stable_required=self.judge.history.maxlen,
+                        stable_target=self.first,
+                        feedback="양손 주먹을 유지하고, 운전 기준 영상처럼 핸들을 좌우로 돌리는 동작을 이어가세요.")
         result = self.judge.update(prediction)
         result["recognized_words"] = [self.first] if self.stage else []
         if result["result"] == "PASS":

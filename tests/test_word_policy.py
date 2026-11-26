@@ -23,7 +23,7 @@ def test_sentence_sequence_requires_three_consecutive_predictions():
     from collections import deque
     from ai_server.sequence import WordSequence
     sequence = WordSequence('SEN0009')
-    frames = deque(fist_frame() for _ in range(12))
+    frames = deque(steering_frames())
     driving = Prediction('운전', .99, True, False)
     for _ in range(2):
         assert sequence.update(driving, frames)['result'] == 'RETRY'
@@ -73,7 +73,7 @@ def test_open_hand_high_score_never_advances_driving():
         assert result['stable_count'] == 0
         assert result['recognized_words'] == []
         assert sequence.stage == 0
-    frames = deque([fist_frame()]*8)
+    frames = deque(steering_frames())
     assert sequence.update(Prediction('운전', .99, True, False),frames)['stable_count'] == 1
     frames.append(fist_frame(True))
     assert sequence.update(Prediction('운전', .99, True, False),frames)['stable_count'] == 0
@@ -88,3 +88,45 @@ def test_unknown_or_missing_hand_cannot_confirm_driving():
     result = sequence.update(Prediction('운전', .99, True, False),deque([frame]*8))
     assert result['stable_count'] == 0
     assert sequence.stage == 0
+
+def steering_frames(mode='steer'):
+    import math
+    frames=[]
+    for i in range(8):
+        frame=fist_frame()
+        t=math.radians(25*math.sin(i*math.pi/3)) if mode=='steer' else 0
+        for key,sign in [('left_hand',-1),('right_hand',1)]:
+            dx=sign*.18*math.cos(t)
+            dy=sign*.18*640/480*math.sin(t)
+            if mode=='translate': dx+=i*.01
+            if mode=='one_hand' and sign==1: dx+=i*.02
+            frame[key]=[dict(p,x=p['x']+dx,y=p['y']+dy) for p in frame[key]]
+        frame['timestamp_ms']=i*125
+        frames.append(frame)
+    return frames
+
+
+def test_motion_gate_rejects_static_fists_and_common_translation():
+    from collections import deque
+    from ai_server.sequence import WordSequence
+    from ai_server.fist_gate import driving_motion_visible
+    assert driving_motion_visible(steering_frames())
+    for mode in ['static','translate','one_hand']:
+        frames=deque(steering_frames(mode))
+        assert not driving_motion_visible(frames)
+        sequence=WordSequence('SEN0009')
+        for _ in range(8):
+            result=sequence.update(Prediction('운전',.999,True,False),frames)
+            assert sequence.stage==0 and result['stable_count']==0
+
+
+def test_motion_gate_rejects_stale_gaps_and_resets_consecutive_count():
+    from collections import deque
+    from ai_server.fist_gate import driving_motion_visible
+    from ai_server.sequence import WordSequence
+    frames=steering_frames();frames[-1]['timestamp_ms']+=1000
+    assert not driving_motion_visible(frames)
+    sequence=WordSequence('SEN0011')
+    assert sequence.update(Prediction('운전',.99,True,False),deque(steering_frames()))['stable_count']==1
+    assert sequence.update(Prediction('운전',.99,True,False),deque(steering_frames('static')))['stable_count']==0
+    assert sequence.stage==0

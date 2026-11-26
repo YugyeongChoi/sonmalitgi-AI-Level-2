@@ -23,7 +23,7 @@ def test_sentence_sequence_requires_three_consecutive_predictions():
     from collections import deque
     from ai_server.sequence import WordSequence
     sequence = WordSequence('SEN0009')
-    frames = deque(range(12))
+    frames = deque(fist_frame() for _ in range(12))
     driving = Prediction('운전', .99, True, False)
     for _ in range(2):
         assert sequence.update(driving, frames)['result'] == 'RETRY'
@@ -52,3 +52,39 @@ def test_consecutive_progress_tracks_target_and_resets():
         assert result['stable_required'] == 3
         assert result['stable_target'] == '목표'
     assert result['result'] == 'PASS'
+
+def fist_frame(open_hand=False):
+    p=[dict(x=.5,y=.7,z=0) for _ in range(21)]
+    p[0]=dict(x=.5,y=.8,z=0)
+    for i,x in ((5,.43),(9,.48),(13,.53),(17,.58)):
+        p[i]=dict(x=x,y=.62,z=0);p[i+1]=dict(x=x,y=.53,z=0)
+        p[i+2]=dict(x=x,y=.46 if open_hand else .58,z=0 if open_hand else -.06)
+        p[i+3]=dict(x=x,y=.40 if open_hand else .65,z=0 if open_hand else -.04)
+    return dict(left_hand=p,right_hand=p,image_width=640,image_height=480)
+
+
+def test_open_hand_high_score_never_advances_driving():
+    from collections import deque
+    from ai_server.sequence import WordSequence
+    sequence = WordSequence('SEN0009')
+    frames = deque([fist_frame(True)]*8)
+    for _ in range(10):
+        result = sequence.update(Prediction('운전', .999, True, False),frames)
+        assert result['stable_count'] == 0
+        assert result['recognized_words'] == []
+        assert sequence.stage == 0
+    frames = deque([fist_frame()]*8)
+    assert sequence.update(Prediction('운전', .99, True, False),frames)['stable_count'] == 1
+    frames.append(fist_frame(True))
+    assert sequence.update(Prediction('운전', .99, True, False),frames)['stable_count'] == 0
+    assert sequence.stage == 0
+
+
+def test_unknown_or_missing_hand_cannot_confirm_driving():
+    from collections import deque
+    from ai_server.sequence import WordSequence
+    sequence = WordSequence('SEN0011')
+    frame = fist_frame();frame['right_hand'] = []
+    result = sequence.update(Prediction('운전', .99, True, False),deque([frame]*8))
+    assert result['stable_count'] == 0
+    assert sequence.stage == 0

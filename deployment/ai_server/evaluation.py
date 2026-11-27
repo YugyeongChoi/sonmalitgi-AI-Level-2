@@ -46,12 +46,23 @@ class Evaluator:
 
 class CumulativeEvaluator:
     """중급의 정답 인식 횟수를 시도 안에서 누적한다. 연속 인식은 요구하지 않는다."""
-    def __init__(self, target, threshold=.5, required=3):
+    def __init__(self, target, threshold=.5, required=2):
         self.target, self.threshold, self.required = target, threshold, required
         self.success_count = 0
         self.armed = True
         self.rest_since = None
         self.previous_frame_time = None
+
+    def finalize(self, reason, elapsed_seconds):
+        from datetime import datetime, timezone
+        result=self.progress()
+        passed=self.success_count>=self.required
+        result.update(result="PASS" if passed else "FAIL", waiting_for_reset=False,
+                      termination_reason="passed" if passed else reason,
+                      evaluation_seconds=round(elapsed_seconds,3),
+                      finished_at=datetime.now(timezone.utc).isoformat(),
+                      evaluation_policy="middle-two-performances-20s-v1")
+        return result
 
     def prepare_next(self):
         if self.success_count <= 0 or self.success_count >= self.required or self.armed:

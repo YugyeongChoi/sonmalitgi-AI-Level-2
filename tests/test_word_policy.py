@@ -134,7 +134,7 @@ def test_motion_gate_rejects_stale_gaps_and_resets_consecutive_count():
 
 def test_middle_counts_nonconsecutive_successes_without_reset():
     from ai_server.evaluation import CumulativeEvaluator
-    judge=CumulativeEvaluator('WORD1290')
+    judge=CumulativeEvaluator('WORD1290', required=3)
     good=Prediction('WORD1290',.8,True,False)
     assert judge.update(good)['success_count']==1
     for p in [Prediction('WORD1191',.99,True,False),Prediction(None,0,False,False),Prediction('WORD1290',.49,True,False)]:
@@ -146,7 +146,7 @@ def test_middle_counts_nonconsecutive_successes_without_reset():
     rearm(judge,2000)
     assert judge.update(good)['result']=='PASS'
     assert judge.update(good)['success_count']==3
-    assert CumulativeEvaluator('WORD1290').success_count==0
+    assert CumulativeEvaluator('WORD1290', required=3).success_count==0
 
 
 def rest_frame(timestamp):
@@ -161,7 +161,7 @@ def rearm(judge,start):
 
 def test_middle_hold_or_detection_loss_never_rearms():
     from ai_server.evaluation import CumulativeEvaluator
-    judge=CumulativeEvaluator('WORD1290');good=Prediction('WORD1290',.99,True,False)
+    judge=CumulativeEvaluator('WORD1290', required=3);good=Prediction('WORD1290',.99,True,False)
     judge.update(good)
     for i in range(20):
         judge.observe_frame(dict(timestamp_ms=i*125,pose=[],left_hand=[],right_hand=[]))
@@ -175,7 +175,7 @@ def test_middle_hold_or_detection_loss_never_rearms():
 
 def test_manual_prepare_does_not_add_success_or_reset_total():
     from ai_server.evaluation import CumulativeEvaluator
-    judge=CumulativeEvaluator('WORD1191');good=Prediction('WORD1191',.99,True,False)
+    judge=CumulativeEvaluator('WORD1191', required=3);good=Prediction('WORD1191',.99,True,False)
     assert not judge.prepare_next()
     assert judge.update(good)['success_count']==1
     assert judge.prepare_next()
@@ -188,7 +188,7 @@ def test_manual_prepare_does_not_add_success_or_reset_total():
 
 def test_detected_lowered_hands_can_rearm_when_pose_wrists_are_occluded():
     from ai_server.evaluation import CumulativeEvaluator
-    judge=CumulativeEvaluator('WORD1191');judge.update(Prediction('WORD1191',.9,True,False))
+    judge=CumulativeEvaluator('WORD1191', required=3);judge.update(Prediction('WORD1191',.9,True,False))
     for i in range(6):
         frame=rest_frame(i*125)
         frame['pose'][15]['visibility']=0;frame['pose'][16]['visibility']=0
@@ -196,3 +196,16 @@ def test_detected_lowered_hands_can_rearm_when_pose_wrists_are_occluded():
         frame['right_hand']=[dict(x=.7,y=.8,z=0)]*21
         judge.observe_frame(frame)
     assert judge.armed and judge.success_count==1
+
+
+def test_middle_two_performances_and_final_fail_reasons():
+    from ai_server.evaluation import CumulativeEvaluator
+    judge=CumulativeEvaluator('WORD1191')
+    assert judge.required==2
+    judge.update(Prediction('WORD1191',.99,True,False))
+    r=judge.finalize('time_limit',20)
+    assert r['result']=='FAIL' and r['success_count']==1 and r['termination_reason']=='time_limit'
+    assert r['evaluation_seconds']==20 and r['finished_at']
+    judge.prepare_next();judge.update(Prediction('WORD1191',.99,True,False))
+    assert judge.finalize('user_end',8)['result']=='PASS'
+    assert judge.finalize('user_end',8)['termination_reason']=='passed'

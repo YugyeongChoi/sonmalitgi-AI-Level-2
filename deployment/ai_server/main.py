@@ -115,7 +115,7 @@ async def evaluate(ws: WebSocket):
             return
         previous_timestamp = -1
         # User-enabled practice policy; it does not claim model calibration.
-        judge = (CumulativeEvaluator(target, threshold=.5, required=3)
+        judge = (CumulativeEvaluator(target, threshold=.5, required=2)
                  if word_session else Evaluator(target))
         if sentence_session:
             judge = Evaluator(target, threshold=.9, stable=3, require_calibrated=False)
@@ -170,9 +170,11 @@ async def evaluate(ws: WebSocket):
         while True:
             event = await receive()
             elapsed = time.monotonic() - began
-            if elapsed > (90 if isinstance(judge, CumulativeEvaluator) else MAX_SECONDS):
+            if elapsed > (20 if isinstance(judge, CumulativeEvaluator) else MAX_SECONDS):
                 if len(frames) >= min_frames and count > last_inferred:
                     latest = await infer()
+                if isinstance(judge, CumulativeEvaluator):
+                    latest.update(judge.finalize("time_limit", time.monotonic()-began))
                 latest["metrics"] = dict(latest.get("metrics", {}), **metrics.snapshot())
                 await ws.send_json(dict(type="final", attempt_id=attempt_id,
                                         target_id=target, model_mode=model.mode, **latest))
@@ -198,6 +200,9 @@ async def evaluate(ws: WebSocket):
             if message is not None and message.get("type") == "stop":
                 if len(frames) >= min_frames and count > last_inferred:
                     latest = await infer()
+                if isinstance(judge, CumulativeEvaluator):
+                    reason="time_limit" if message.get("reason")=="time_limit" else "user_end"
+                    latest.update(judge.finalize(reason,time.monotonic()-began))
                 latest["metrics"] = dict(latest.get("metrics", {}), **metrics.snapshot())
                 await ws.send_json(dict(type="final", attempt_id=attempt_id,
                                         target_id=target, model_mode=model.mode, **latest))
@@ -238,6 +243,8 @@ async def evaluate(ws: WebSocket):
                                         model_mode=model.mode, **latest))
                 # PASS is terminal; FAIL is provisional until user stops.
                 if latest["result"] == "PASS":
+                    if isinstance(judge, CumulativeEvaluator):
+                        latest.update(judge.finalize("passed",time.monotonic()-began))
                     latest["metrics"] = dict(latest.get("metrics", {}), **metrics.snapshot())
                     await ws.send_json(dict(type="final", attempt_id=attempt_id,
                                             target_id=target, model_mode=model.mode, **latest))

@@ -100,7 +100,7 @@ def test_middle_websocket_requires_rest_between_counts(monkeypatch):
             assert latest['success_count']==1 and latest['waiting_for_reset']
             for _ in range(20):send()
             assert latest['success_count']==1 and len(windows)==1
-            for goal in (2,3):
+            for goal in (2,):
                 if goal==2:
                     ws.send_json(dict(type='next_repetition'))
                     latest=ws.receive_json()
@@ -111,4 +111,21 @@ def test_middle_websocket_requires_rest_between_counts(monkeypatch):
                 for _ in range(16):r=send()
                 assert latest['success_count']==goal
             assert r['type']=='final' and r['result']=='PASS'
-            assert windows==[16,16,16]
+            assert windows==[16,16]
+
+
+def test_middle_user_end_produces_final_failure(monkeypatch):
+    from fastapi.testclient import TestClient
+    from ai_server.main import app
+    import uuid
+    monkeypatch.setenv('WORD_MODEL_ADAPTER','intermediate_v4.adapter:create_model')
+    monkeypatch.setenv('INTERMEDIATE_CHECKPOINT',str(ROOT/'intermediate_v4/best.pt'))
+    with TestClient(app) as client:
+        with client.websocket_connect('/ws/v1/word/evaluate',headers={'origin':'http://localhost:5173'}) as ws:
+            ws.send_json(dict(type='start',input_mode='landmarks',target_id='WORD1191',attempt_id=str(uuid.uuid4())))
+            assert ws.receive_json()['type']=='ready'
+            ws.send_json(dict(type='stop',reason='time_limit'))
+            r=ws.receive_json()
+            assert r['type']=='final' and r['result']=='FAIL'
+            assert r['success_count']==0 and r['success_required']==2
+            assert r['termination_reason']=='time_limit' and r['finished_at']

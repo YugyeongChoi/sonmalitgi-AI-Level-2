@@ -42,3 +42,21 @@ class Evaluator:
                     stable_target=self.target,
                     predicted_id=p.predicted_id, confidence=p.confidence,
                     result=result, feedback=p.diagnostic or feedback)
+
+
+class CumulativeEvaluator:
+    """중급의 정답 인식 횟수를 시도 안에서 누적한다. 연속 인식은 요구하지 않는다."""
+    def __init__(self, target, threshold=.5, required=3):
+        self.target, self.threshold, self.required = target, threshold, required
+        self.success_count = 0
+
+    def update(self, prediction):
+        p = prediction
+        if not math.isfinite(p.confidence) or not 0 <= p.confidence <= 1:
+            raise ValueError("Invalid model confidence")
+        if p.capture_ok and p.predicted_id == self.target and p.confidence >= self.threshold:
+            self.success_count = min(self.required, self.success_count + 1)
+        return dict(predicted_id=p.predicted_id, confidence=p.confidence,
+                    result="PASS" if self.success_count >= self.required else "RETRY",
+                    feedback="", success_count=self.success_count, success_required=self.required,
+                    count_mode="cumulative")

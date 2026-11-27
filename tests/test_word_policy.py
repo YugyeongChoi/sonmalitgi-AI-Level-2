@@ -130,3 +130,17 @@ def test_motion_gate_rejects_stale_gaps_and_resets_consecutive_count():
     assert sequence.update(Prediction('운전',.99,True,False),deque(steering_frames()))['stable_count']==1
     assert sequence.update(Prediction('운전',.99,True,False),deque(steering_frames('static')))['stable_count']==0
     assert sequence.stage==0
+
+
+def test_middle_counts_nonconsecutive_successes_without_reset():
+    from ai_server.evaluation import CumulativeEvaluator
+    judge=CumulativeEvaluator('WORD1290')
+    good=Prediction('WORD1290',.8,True,False)
+    assert judge.update(good)['success_count']==1
+    for p in [Prediction('WORD1191',.99,True,False),Prediction(None,0,False,False),Prediction('WORD1290',.49,True,False)]:
+        r=judge.update(p)
+        assert r['success_count']==1 and r['result']=='RETRY'
+    assert judge.update(good)['success_count']==2
+    assert judge.update(good)['result']=='PASS'
+    assert judge.update(good)['success_count']==3
+    assert CumulativeEvaluator('WORD1290').success_count==0

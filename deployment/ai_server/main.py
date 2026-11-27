@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from PIL import Image, UnidentifiedImageError
-from .evaluation import Evaluator
+from .evaluation import Evaluator, CumulativeEvaluator
 from .model import load_model, load_word_model
 from .landmarks import decode_landmarks
 
@@ -115,7 +115,7 @@ async def evaluate(ws: WebSocket):
             return
         previous_timestamp = -1
         # User-enabled practice policy; it does not claim model calibration.
-        judge = (Evaluator(target, threshold=.5, stable=1, require_calibrated=False)
+        judge = (CumulativeEvaluator(target, threshold=.5, required=3)
                  if word_session else Evaluator(target))
         if sentence_session:
             judge = Evaluator(target, threshold=.9, stable=3, require_calibrated=False)
@@ -138,7 +138,11 @@ async def evaluate(ws: WebSocket):
                 inference_started = time.monotonic()
                 prediction = await asyncio.to_thread(predict, samples)
             inference_finished = time.monotonic()
+            previous_success = getattr(judge, "success_count", 0)
             outcome = sequence.update(prediction, frames) if sequence else judge.update(prediction)
+            if isinstance(judge, CumulativeEvaluator) and judge.success_count > previous_success:
+                # 같은 겹친 창으로 여러 번 적립하지 않고 새 좌표 구간을 받는다.
+                frames.clear()
             if outcome["result"] == "PASS" and metrics.pass_seconds is None:
                 metrics.pass_seconds = round(inference_finished - metrics.started, 3)
             window_seconds = (

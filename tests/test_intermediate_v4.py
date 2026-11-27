@@ -68,3 +68,30 @@ def test_websocket_bridge_loads_middle_and_preserves_advanced(monkeypatch):
             else:
                 ws.send_json(dict(type='stop'))
                 assert ws.receive_json()['type']=='final'
+
+def test_middle_websocket_needs_three_fresh_windows(monkeypatch):
+    from fastapi.testclient import TestClient
+    from ai_server.main import app
+    from ai_server.model import Prediction
+    from types import SimpleNamespace
+    import uuid
+    monkeypatch.setenv('WORD_MODEL_ADAPTER','intermediate_v4.adapter:create_model')
+    monkeypatch.setenv('INTERMEDIATE_CHECKPOINT',str(ROOT/'intermediate_v4/best.pt'))
+    windows=[]
+    def predict(frames):
+        windows.append(len(frames));return Prediction('WORD1290',.99,True,False)
+    with TestClient(app) as client:
+        app.state.word_model=SimpleNamespace(mode='test',supported_ids=['WORD1290'],input_schema='mediapipe-body-hands-v1',predict_landmarks=predict)
+        with client.websocket_connect('/ws/v1/word/evaluate',headers={'origin':'http://localhost:5173'}) as ws:
+            ws.send_json(dict(type='start',input_mode='landmarks',target_id='WORD1290',attempt_id=str(uuid.uuid4())))
+            assert ws.receive_json()['type']=='ready'
+            for i in range(48):
+                f=sample();f['timestamp_ms']=i+1;ws.send_json(f)
+                r=ws.receive_json()
+                if r['type']=='prediction':
+                    assert r['success_count']==(i+1)//16
+                    r=ws.receive_json()
+                    if r['type']=='final':
+                        assert i==47 and r['result']=='PASS';break
+                assert r['type']=='ack'
+            assert windows==[16,16,16]

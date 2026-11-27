@@ -185,6 +185,16 @@ async def evaluate(ws: WebSocket):
                 message = json.loads(raw)
                 if not isinstance(message, dict):
                     raise ValueError("Object required")
+            if message is not None and message.get("type") == "next_repetition":
+                if not isinstance(judge, CumulativeEvaluator):
+                    raise ValueError("Repetition reset is only available for intermediate practice")
+                if judge.prepare_next():
+                    frames.clear()
+                    word_frame_count = 0
+                latest = judge.progress()
+                await ws.send_json(dict(type="repetition_ready", attempt_id=attempt_id,
+                                        target_id=target, model_mode=model.mode, **latest))
+                continue
             if message is not None and message.get("type") == "stop":
                 if len(frames) >= min_frames and count > last_inferred:
                     latest = await infer()

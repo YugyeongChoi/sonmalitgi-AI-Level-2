@@ -101,7 +101,12 @@ def test_middle_websocket_requires_rest_between_counts(monkeypatch):
             for _ in range(20):send()
             assert latest['success_count']==1 and len(windows)==1
             for goal in (2,3):
-                for _ in range(6):send(rest=True)
+                if goal==2:
+                    ws.send_json(dict(type='next_repetition'))
+                    latest=ws.receive_json()
+                    assert latest['type']=='repetition_ready' and latest['success_count']==1
+                else:
+                    for _ in range(6):send(rest=True)
                 assert not latest['waiting_for_reset']
                 for _ in range(16):r=send()
                 assert latest['success_count']==goal

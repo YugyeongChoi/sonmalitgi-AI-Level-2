@@ -172,3 +172,27 @@ def test_middle_hold_or_detection_loss_never_rearms():
     assert not judge.armed
     rearm(judge,5000)
     assert judge.update(good)['success_count']==2
+
+def test_manual_prepare_does_not_add_success_or_reset_total():
+    from ai_server.evaluation import CumulativeEvaluator
+    judge=CumulativeEvaluator('WORD1191');good=Prediction('WORD1191',.99,True,False)
+    assert not judge.prepare_next()
+    assert judge.update(good)['success_count']==1
+    assert judge.prepare_next()
+    assert judge.success_count==1 and judge.armed
+    assert not judge.prepare_next()
+    assert judge.update(good)['success_count']==2
+    assert judge.prepare_next()
+    assert judge.update(good)['result']=='PASS'
+    assert not judge.prepare_next()
+
+def test_detected_lowered_hands_can_rearm_when_pose_wrists_are_occluded():
+    from ai_server.evaluation import CumulativeEvaluator
+    judge=CumulativeEvaluator('WORD1191');judge.update(Prediction('WORD1191',.9,True,False))
+    for i in range(6):
+        frame=rest_frame(i*125)
+        frame['pose'][15]['visibility']=0;frame['pose'][16]['visibility']=0
+        frame['left_hand']=[dict(x=.3,y=.8,z=0)]*21
+        frame['right_hand']=[dict(x=.7,y=.8,z=0)]*21
+        judge.observe_frame(frame)
+    assert judge.armed and judge.success_count==1

@@ -53,6 +53,14 @@ class CumulativeEvaluator:
         self.rest_since = None
         self.previous_frame_time = None
 
+    def prepare_next(self):
+        if self.success_count <= 0 or self.success_count >= self.required or self.armed:
+            return False
+        self.armed=True
+        self.rest_since=None
+        self.previous_frame_time=None
+        return True
+
     def observe_frame(self, frame):
         if self.armed or self.success_count >= self.required: return False
         timestamp=frame.get('timestamp_ms')
@@ -91,14 +99,19 @@ def middle_rest_pose(frame):
     """손 검출 실패가 아닌, 보이는 어깨·양손목의 내려간 자세만 종료로 인정."""
     try:
         pose=frame['pose'];w,h=frame['image_width'],frame['image_height']
-        if len(pose)!=33 or any(pose[i].get('visibility',0)<.5 for i in (11,12,15,16)): return False
+        if len(pose)!=33 or any(pose[i].get('visibility',0)<.5 for i in (11,12)): return False
         shoulder=math.hypot((pose[11]['x']-pose[12]['x'])*w,(pose[11]['y']-pose[12]['y'])*h)
         if shoulder<max(w,h)*.1:return False
         neck=(pose[11]['y']+pose[12]['y'])*h/2
-        boundary=neck+.85*shoulder
-        if any(pose[i]['y']*h<boundary for i in (15,16)):return False
-        for key in ('left_hand','right_hand'):
+        boundary=neck+.55*shoulder
+        for key,index in [('left_hand',15),('right_hand',16)]:
             hand=frame.get(key,[])
-            if hand and hand[0]['y']*h<boundary:return False
+            if len(hand)==21:
+                wrist_y=hand[0]['y']*h
+            elif pose[index].get('visibility',0)>=.5:
+                wrist_y=pose[index]['y']*h
+            else:
+                return False
+            if not math.isfinite(wrist_y) or wrist_y<boundary:return False
         return True
     except (KeyError,TypeError,ValueError):return False

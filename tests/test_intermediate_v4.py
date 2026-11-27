@@ -69,7 +69,7 @@ def test_websocket_bridge_loads_middle_and_preserves_advanced(monkeypatch):
                 ws.send_json(dict(type='stop'))
                 assert ws.receive_json()['type']=='final'
 
-def test_middle_websocket_needs_three_fresh_windows(monkeypatch):
+def test_middle_websocket_requires_rest_between_counts(monkeypatch):
     from fastapi.testclient import TestClient
     from ai_server.main import app
     from ai_server.model import Prediction
@@ -85,13 +85,25 @@ def test_middle_websocket_needs_three_fresh_windows(monkeypatch):
         with client.websocket_connect('/ws/v1/word/evaluate',headers={'origin':'http://localhost:5173'}) as ws:
             ws.send_json(dict(type='start',input_mode='landmarks',target_id='WORD1290',attempt_id=str(uuid.uuid4())))
             assert ws.receive_json()['type']=='ready'
-            for i in range(48):
-                f=sample();f['timestamp_ms']=i+1;ws.send_json(f)
-                r=ws.receive_json()
-                if r['type']=='prediction':
-                    assert r['success_count']==(i+1)//16
+            clock=0;latest=None
+            def send(rest=False):
+                nonlocal clock,latest
+                f=sample();clock+=125;f['timestamp_ms']=clock
+                if rest:
+                    f['pose'][15]['y']=.95;f['pose'][16]['y']=.95;f['left_hand']=[];f['right_hand']=[]
+                ws.send_json(f)
+                while True:
                     r=ws.receive_json()
-                    if r['type']=='final':
-                        assert i==47 and r['result']=='PASS';break
-                assert r['type']=='ack'
+                    if r['type'] in ('prediction','final'):latest=r
+                    if r['type'] in ('ack','final'):return r
+            for _ in range(16):send()
+            assert latest['success_count']==1 and latest['waiting_for_reset']
+            for _ in range(20):send()
+            assert latest['success_count']==1 and len(windows)==1
+            for goal in (2,3):
+                for _ in range(6):send(rest=True)
+                assert not latest['waiting_for_reset']
+                for _ in range(16):r=send()
+                assert latest['success_count']==goal
+            assert r['type']=='final' and r['result']=='PASS'
             assert windows==[16,16,16]

@@ -140,7 +140,35 @@ def test_middle_counts_nonconsecutive_successes_without_reset():
     for p in [Prediction('WORD1191',.99,True,False),Prediction(None,0,False,False),Prediction('WORD1290',.49,True,False)]:
         r=judge.update(p)
         assert r['success_count']==1 and r['result']=='RETRY'
+    assert judge.update(good)['success_count']==1
+    rearm(judge,0)
     assert judge.update(good)['success_count']==2
+    rearm(judge,2000)
     assert judge.update(good)['result']=='PASS'
     assert judge.update(good)['success_count']==3
     assert CumulativeEvaluator('WORD1290').success_count==0
+
+
+def rest_frame(timestamp):
+    p=[dict(x=.5,y=.3,z=0,visibility=1) for _ in range(33)]
+    p[11]['x']=.65;p[12]['x']=.35
+    p[15]['y']=.95;p[16]['y']=.95
+    return dict(pose=p,left_hand=[],right_hand=[],image_width=640,image_height=480,timestamp_ms=timestamp)
+
+def rearm(judge,start):
+    for i in range(6):judge.observe_frame(rest_frame(start+i*125))
+    assert judge.armed
+
+def test_middle_hold_or_detection_loss_never_rearms():
+    from ai_server.evaluation import CumulativeEvaluator
+    judge=CumulativeEvaluator('WORD1290');good=Prediction('WORD1290',.99,True,False)
+    judge.update(good)
+    for i in range(20):
+        judge.observe_frame(dict(timestamp_ms=i*125,pose=[],left_hand=[],right_hand=[]))
+        assert judge.update(good)['success_count']==1
+    assert not judge.armed
+    assert not judge.observe_frame(rest_frame(3000))
+    assert not judge.observe_frame(rest_frame(4000))
+    assert not judge.armed
+    rearm(judge,5000)
+    assert judge.update(good)['success_count']==2

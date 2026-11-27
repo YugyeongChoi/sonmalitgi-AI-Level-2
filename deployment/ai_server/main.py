@@ -123,6 +123,7 @@ async def evaluate(ws: WebSocket):
         frames = deque(maxlen=12 if sequence else SENTENCE_WINDOW if sentence_session else WINDOW)
         stride = 2 if sentence_session else STRIDE
         count = 0
+        word_frame_count = 0
         latest = dict(result="CAPTURE_ERROR", predicted_id=None, confidence=0,
                       feedback=("카메라가 켜진 뒤 문장을 끝까지 표현해 주세요. "
                                 f"촬영 프레임이 {min_frames}개 이상 필요합니다."
@@ -130,6 +131,7 @@ async def evaluate(ws: WebSocket):
         metrics = AttemptMetrics()
         last_inferred = 0
         async def infer():
+            nonlocal word_frame_count
             samples = list(frames)
             if sequence:
                 samples = samples[-sequence.window:]
@@ -143,6 +145,7 @@ async def evaluate(ws: WebSocket):
             if isinstance(judge, CumulativeEvaluator) and judge.success_count > previous_success:
                 # 같은 겹친 창으로 여러 번 적립하지 않고 새 좌표 구간을 받는다.
                 frames.clear()
+                word_frame_count = 0
             if outcome["result"] == "PASS" and metrics.pass_seconds is None:
                 metrics.pass_seconds = round(inference_finished - metrics.started, 3)
             window_seconds = (
@@ -167,7 +170,7 @@ async def evaluate(ws: WebSocket):
         while True:
             event = await receive()
             elapsed = time.monotonic() - began
-            if elapsed > MAX_SECONDS:
+            if elapsed > (90 if isinstance(judge, CumulativeEvaluator) else MAX_SECONDS):
                 if len(frames) >= min_frames and count > last_inferred:
                     latest = await infer()
                 latest["metrics"] = dict(latest.get("metrics", {}), **metrics.snapshot())
@@ -201,11 +204,23 @@ async def evaluate(ws: WebSocket):
                 if data is None:
                     raise ValueError("JPEG binary required")
                 frame = await asyncio.to_thread(decode_frame, data)
+            if isinstance(judge, CumulativeEvaluator) and not judge.armed:
+                judge.observe_frame(frame)
+                frames.clear()
+                word_frame_count = 0
+                metrics.receive_frame()
+                count += 1
+                latest = judge.progress()
+                await ws.send_json(dict(type="prediction", attempt_id=attempt_id,
+                                        target_id=target, frame_count=count, model_mode=model.mode, **latest))
+                await ws.send_json(dict(type="ack", frame_count=count, metrics=metrics.snapshot()))
+                continue
             frames.append(frame)
+            word_frame_count += 1
             metrics.receive_frame()
             count += 1
             # One client frame is in flight; server acknowledges after any inference.
-            if len(frames) >= min_frames and (count - min_frames) % stride == 0:
+            if len(frames) >= min_frames and ((word_frame_count if isinstance(judge, CumulativeEvaluator) else count) - min_frames) % stride == 0:
                 latest = await infer()
                 last_inferred = count
                 await ws.send_json(dict(type="prediction", attempt_id=attempt_id,

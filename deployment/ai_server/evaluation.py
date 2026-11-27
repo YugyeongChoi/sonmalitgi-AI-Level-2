@@ -49,14 +49,56 @@ class CumulativeEvaluator:
     def __init__(self, target, threshold=.5, required=3):
         self.target, self.threshold, self.required = target, threshold, required
         self.success_count = 0
+        self.armed = True
+        self.rest_since = None
+        self.previous_frame_time = None
+
+    def observe_frame(self, frame):
+        if self.armed or self.success_count >= self.required: return False
+        timestamp=frame.get('timestamp_ms')
+        if not isinstance(timestamp,(int,float)) or not math.isfinite(timestamp) or not middle_rest_pose(frame):
+            self.rest_since=None
+            self.previous_frame_time=None
+            return False
+        if self.previous_frame_time is None or not 0 < timestamp-self.previous_frame_time <= 300:
+            self.rest_since=timestamp
+        self.previous_frame_time=timestamp
+        if timestamp-self.rest_since >= 600:
+            self.armed=True
+            self.rest_since=None
+            self.previous_frame_time=None
+            return True
+        return False
+
+    def progress(self, prediction=None):
+        return dict(predicted_id=prediction.predicted_id if prediction else None,
+                    confidence=prediction.confidence if prediction else 0,
+                    result="PASS" if self.success_count >= self.required else "RETRY",
+                    feedback="", success_count=self.success_count, success_required=self.required,
+                    count_mode="cumulative", waiting_for_reset=not self.armed and self.success_count<self.required)
 
     def update(self, prediction):
         p = prediction
         if not math.isfinite(p.confidence) or not 0 <= p.confidence <= 1:
             raise ValueError("Invalid model confidence")
-        if p.capture_ok and p.predicted_id == self.target and p.confidence >= self.threshold:
+        if self.armed and p.capture_ok and p.predicted_id == self.target and p.confidence >= self.threshold:
             self.success_count = min(self.required, self.success_count + 1)
-        return dict(predicted_id=p.predicted_id, confidence=p.confidence,
-                    result="PASS" if self.success_count >= self.required else "RETRY",
-                    feedback="", success_count=self.success_count, success_required=self.required,
-                    count_mode="cumulative")
+            self.armed = False
+        return self.progress(p)
+
+
+def middle_rest_pose(frame):
+    """손 검출 실패가 아닌, 보이는 어깨·양손목의 내려간 자세만 종료로 인정."""
+    try:
+        pose=frame['pose'];w,h=frame['image_width'],frame['image_height']
+        if len(pose)!=33 or any(pose[i].get('visibility',0)<.5 for i in (11,12,15,16)): return False
+        shoulder=math.hypot((pose[11]['x']-pose[12]['x'])*w,(pose[11]['y']-pose[12]['y'])*h)
+        if shoulder<max(w,h)*.1:return False
+        neck=(pose[11]['y']+pose[12]['y'])*h/2
+        boundary=neck+.85*shoulder
+        if any(pose[i]['y']*h<boundary for i in (15,16)):return False
+        for key in ('left_hand','right_hand'):
+            hand=frame.get(key,[])
+            if hand and hand[0]['y']*h<boundary:return False
+        return True
+    except (KeyError,TypeError,ValueError):return False

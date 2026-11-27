@@ -45,6 +45,8 @@ app = FastAPI(lifespan=lifespan)
 def health():
     return {"status": "ok", "model_mode": app.state.model.mode,
             "word_model_mode": app.state.word_model.mode,
+            "word_input_schema": getattr(app.state.word_model,"input_schema",None),
+            "word_source_revision": "7ad3178e11f955205f0b9937660d625904dafab6",
             "unit5_supported_ids": sorted(getattr(app.state.unit5_model, "supported_ids", [])),
             "unit5_sequence_ids": sorted(SEQUENCES) if app.state.unit5_words else [],
             "word_supported_ids": sorted(getattr(app.state.word_model, "supported_ids", []))}
@@ -186,7 +188,7 @@ async def evaluate(ws: WebSocket):
             if input_mode == "landmarks":
                 if message is None:
                     raise ValueError("Landmark JSON required")
-                if word_session and message.get("schema") != "mediapipe-hands-v1":
+                if word_session and message.get("schema") != getattr(model, "input_schema", "mediapipe-hands-v1"):
                     raise ValueError("Hands-only schema required")
                 frame = decode_landmarks(message, previous_timestamp)
                 previous_timestamp = frame["timestamp_ms"]
@@ -268,7 +270,7 @@ async def recognize(ws: WebSocket):
                 raise ValueError("Object required")
             if message.get("type") == "stop":
                 return
-            if message.get("schema") != "mediapipe-hands-v1":
+            if message.get("schema") != getattr(model, "input_schema", "mediapipe-hands-v1"):
                 raise ValueError("Hands schema required")
             frame = decode_landmarks(message, previous)
             previous = frame["timestamp_ms"]

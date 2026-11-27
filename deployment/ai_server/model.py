@@ -47,7 +47,7 @@ def load_word_model():
     model = load_model("WORD_MODEL_ADAPTER")
     if isinstance(model, DemoModel):
         return model
-    if (getattr(model, "input_schema", None) != "mediapipe-hands-v1"
+    if (getattr(model, "input_schema", None) not in ("mediapipe-hands-v1", "mediapipe-body-hands-v1")
             or not callable(getattr(model, "predict_landmarks", None))):
         raise ValueError("WORD_MODEL_ADAPTER must support mediapipe-hands-v1")
     ids = getattr(model, "supported_ids", None)

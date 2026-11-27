@@ -39,3 +39,7 @@
 !unit5.pt
 
 !unit5_words.pt
+
+!intermediate_v4/
+!intermediate_v4/**
+intermediate_v4/__pycache__/

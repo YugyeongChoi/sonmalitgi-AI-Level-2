@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/sonmal-itgi/sonmalitgi-AI-Level-2",
+  "revision": "7ad3178e11f955205f0b9937660d625904dafab6",
+  "checkpoint": "runs/v4_11words/best.pt",
+  "sha256": "2d75f1e7042f0ffe26a99721f2f8f993eaa5a7dfc602a54b4628917985e30ce5",
+  "input": "32x194",
+  "classes": 11
+}

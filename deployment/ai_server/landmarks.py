@@ -7,7 +7,7 @@ LEGACY_COUNTS = {"pose": 33, "face": 478, "left_hand": 21, "right_hand": 21}
 
 def decode_landmarks(message, previous_timestamp=-1):
     schema = message.get("schema")
-    if message.get("type") != "landmarks" or schema not in (SCHEMA, "mediapipe-hands-v1"):
+    if message.get("type") != "landmarks" or schema not in (SCHEMA, "mediapipe-hands-v1", "mediapipe-body-hands-v1"):
         raise ValueError("Unknown landmark schema")
     timestamp = message.get("timestamp_ms")
     def finite(value):
@@ -15,6 +15,7 @@ def decode_landmarks(message, previous_timestamp=-1):
     if not finite(timestamp) or timestamp < 0 or timestamp <= previous_timestamp:
         raise ValueError("Landmark timestamps must increase")
     counts = LEGACY_COUNTS if schema == SCHEMA else {"left_hand": 21, "right_hand": 21}
+    if schema == "mediapipe-body-hands-v1": counts = dict(counts, pose=33)
     frame = {"schema": schema, "timestamp_ms": timestamp}
     for name, count in counts.items():
         points = message.get(name)
